@@ -18,7 +18,18 @@
 | Alarmas locales    | **expo-notifications scheduling**    | Categoría `alarm`, full-screen, sonido custom — sin consumir batería   |
 | CI / Build         | **EAS (Expo Application Services)**  | Build en la nube, submit a stores                                       |
 | Versionado        | **Git + GitHub**                     | Estándar                                                                |
-| Gestión de proyecto| **GitHub Projects**                  | Cercano al código, sin herramienta extra                                |
+## 1.1 Decisión de implementación sobre `app.json` vs `app.config.ts`
+
+**Estado actual (post-bootstrap 2026-06-10):** el proyecto usa `app.json` (JSON estático), **no** `app.config.ts`.
+
+**Razón:** la plantilla default de Expo SDK 56 ya no genera `app.config.ts`; usa `app.json`. Para no añadir complejidad innecesaria en el MVP, se mantiene `app.json`.
+
+**Cuándo migrar a `app.config.ts`:**
+- Cuando necesitemos **environments dinámicos** (dev/staging/prod con `EXPO_PUBLIC_*` distintos desde la misma config).
+- Cuando se quiera **inyectar EAS secrets** al build.
+- Probablemente en v0.2.0 cuando haya 2+ entornos reales.
+
+**Migración:** instalar `expo-config` y renombrar `app.json` → `app.config.ts` exportando un objeto con la misma estructura.
 
 > **Descartado explícitamente:** Firebase (queremos SQL real, no NoSQL), Redux (overkill), un backend Node propio (Supabase cubre todo gratis para este tamaño), Expo Web (no entra en MVP), Flutter (TS nos da más productividad en este equipo).
 
@@ -74,9 +85,11 @@
 
 ## 3. Estructura de carpetas propuesta
 
+> **Nota de implementación (2026-06-10):** la plantilla default de Expo SDK 56 usa `app.json` en vez de `app.config.ts`, y la raíz de las rutas de Expo Router es top-level `app/` (no `src/app/`). Esta estructura refleja lo que quedó en el bootstrap.
+
 ```
 coroAdministracion/
-├── app/                          # Expo Router
+├── app/                          # Expo Router (rutas = archivos, top-level)
 │   ├── (auth)/
 │   │   ├── login.tsx
 │   │   ├── register.tsx
@@ -94,7 +107,9 @@ coroAdministracion/
 │   │   │   ├── patron/           # configurar patrón recurrente
 │   │   │   └── configuracion/
 │   │   └── perfil.tsx
-│   └── _layout.tsx
+│   ├── _layout.tsx
+│   └── index.tsx
+├── app.json                      # ⚠ NO app.config.ts (ver nota abajo)
 ├── src/
 │   ├── features/                 # lógica por dominio
 │   │   ├── auth/
@@ -127,8 +142,8 @@ coroAdministracion/
 │   ├── functions/                # edge functions
 │   └── seed.sql
 ├── assets/
-├── app.config.ts
-├── tailwind.config.js
+├── app.json
+├── tailwind.config.js,
 ├── tsconfig.json
 └── package.json
 ```
