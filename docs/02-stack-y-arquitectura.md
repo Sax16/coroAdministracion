@@ -218,11 +218,13 @@ Para Android se requiere el permiso `SCHEDULE_EXACT_ALARM` (Android 12+). Pedirl
 
 | Entorno     | Para qué                              | Cómo se levanta                       |
 |-------------|---------------------------------------|---------------------------------------|
-| `local`     | Desarrollo en máquina del dev         | `npx expo start`                     |
+| `local`     | Desarrollo en máquina del dev         | `pnpm start` (equivale a `expo start`) |
 | `staging`   | Builds de prueba pre-producción       | EAS Build perfil `staging`            |
 | `production`| Lo que ven los usuarios               | EAS Build + Submit a stores          |
 
 Cada entorno apunta a un **proyecto Supabase distinto** (`dev`, `staging`, `prod`).
+
+**Package manager: `pnpm`.** Convención del proyecto definida el 2026-06-10. Nunca usar `npm` ni `yarn` en este repo. Ver `docs/06-convenciones-desarrollo.md` para detalles.
 
 ## 8. Pruebas
 

@@ -188,6 +188,7 @@ Después del servicio, el Responsable (o el Admin si el Responsable falla) hace 
 - Zona horaria por defecto: America/Lima. Configurable por grupo.
 - Idioma: español (es-PE / es-419) en MVP. No hay i18n multi-idioma.
 - **Sin internet no funciona** (salvo caché de la última vista leída). La app no tiene modo offline completo en MVP.
+- **Package manager: `pnpm` siempre, `npm` nunca.** Convención del proyecto (definida 2026-06-10). Ver `docs/06-convenciones-desarrollo.md`.
 
 ## 9. Glosario
 

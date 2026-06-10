@@ -23,7 +23,8 @@ Toda la documentación de producto y diseño vive en [`docs/`](./docs/):
 | 3 | [Requerimientos](./docs/03-requerimientos.md) | RF-### y RNF-### trazables, historias de usuario, out of scope |
 | 4 | [Modelo de datos](./docs/04-modelo-de-datos.md) | ERD, 14 tablas multi-tenant, RLS, operaciones privilegiadas, triggers, vistas, decisiones |
 | 5 | [Roadmap](./docs/05-roadmap.md) | v0.1.0 → v2.0.0, criterios de "done", riesgos |
-| 6 | [Changelog auditoría](./docs/CHANGELOG-AUDITORIA.md) | Detalle de las 20 correcciones aplicadas (8 críticas + 12 inconsistencias) tras la auditoría del 2026-06-10 |
+| 6 | [Convenciones de desarrollo](./docs/06-convenciones-desarrollo.md) | Package manager (pnpm), commits, branches, RLS, env vars, checklist de PR |
+| 7 | [Changelog auditoría](./docs/CHANGELOG-AUDITORIA.md) | Detalle de las 25 correcciones aplicadas tras la auditoría del 2026-06-10 |
 
 ## Conceptos clave del producto
 
