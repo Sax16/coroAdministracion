@@ -1,25 +1,38 @@
 /**
  * Cliente singleton de Supabase.
  *
- * Las claves se exponen con el prefijo EXPO_PUBLIC_ (práctica estándar
- * en Expo cuando las RLS están bien configuradas). Ver
- * docs/06-convenciones-desarrollo.md §7.
+ * Configuración:
+ * - Auth: persistencia de sesión con AsyncStorage (RN no tiene localStorage nativo).
+ * - Las keys se exponen con prefijo `EXPO_PUBLIC_` (Expo las inyecta en el bundle
+ * del cliente). Es seguro SI las RLS están bien configuradas — el cliente
+ * solo puede leer/escribir lo que las policies permitan.
+ * - `detectSessionInUrl: false` → en mobile no hay URL callback.
  *
- * TODO (post-bootstrap):
- * - Reemplazar las URLs/claves placeholder con las reales del proyecto Supabase `dev`.
- * - Configurar persistencia de sesión con AsyncStorage (Supabase Auth
- *   en RN requiere esto manualmente; el cliente web lo hace solo).
+ * Variables de entorno esperadas (definidas en .env, que está en .gitignore):
+ * - EXPO_PUBLIC_SUPABASE_URL
+ * - EXPO_PUBLIC_SUPABASE_ANON_KEY
+ *
+ * Ver docs/06-convenciones-desarrollo.md §7 para la política de secrets.
  */
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? 'https://placeholder.supabase.co';
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? 'placeholder-anon-key';
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+ throw new Error(
+ 'Faltan variables de entorno de Supabase. ' +
+ 'Asegurate de tener un .env en la raíz con EXPO_PUBLIC_SUPABASE_URL y ' +
+ 'EXPO_PUBLIC_SUPABASE_ANON_KEY. Ver docs/06-convenciones-desarrollo.md §7.',
+ );
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    // Persistencia de sesión se configurará cuando se integre AsyncStorage
-    autoRefreshToken: true,
-    persistSession: false,
-    detectSessionInUrl: false,
-  },
+ auth: {
+ storage: AsyncStorage,
+ autoRefreshToken: true,
+ persistSession: true,
+ detectSessionInUrl: false,
+ },
 });
