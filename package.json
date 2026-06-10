@@ -1,0 +1,59 @@
+{
+  "name": "coro-administracion",
+  "main": "expo-router/entry",
+  "version": "0.1.0",
+  "description": "App móvil para administrar un grupo de alabanza: multi-grupo, servicios recurrentes, asignaciones, ensayos, comunicados y cierre de asistencia.",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "lint": "expo lint",
+    "typecheck": "tsc --noEmit",
+    "reset-project": "node ./scripts/reset-project.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "@tanstack/react-query": "^5.59.0",
+    "expo": "~56.0.9",
+    "expo-constants": "~56.0.17",
+    "expo-font": "~56.0.5",
+    "expo-linking": "~56.0.13",
+    "expo-notifications": "~0.32.0",
+    "expo-router": "~56.2.9",
+    "expo-splash-screen": "~56.0.10",
+    "expo-status-bar": "~56.0.4",
+    "expo-system-ui": "~56.0.5",
+    "lucide-react-native": "^0.460.0",
+    "nativewind": "^4.1.23",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.85.3",
+    "react-native-gesture-handler": "~2.31.1",
+    "react-native-reanimated": "4.3.1",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "4.25.2",
+    "react-native-web": "~0.21.0",
+    "react-native-worklets": "0.8.3",
+    "zustand": "^5.0.1"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "@types/react-native": "^0.73.0",
+    "@typescript-eslint/eslint-plugin": "^8.61.0",
+    "@typescript-eslint/parser": "^8.61.0",
+    "eslint": "^9.17.0",
+    "eslint-config-expo": "~9.2.0",
+    "prettier": "^3.4.2",
+    "prettier-plugin-tailwindcss": "^0.6.9",
+    "tailwindcss": "^3.4.17",
+    "typescript": "~6.0.3"
+  },
+  "private": true,
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "msgpackr-extract",
+      "unrs-resolver"
+    ]
+  }
+}
