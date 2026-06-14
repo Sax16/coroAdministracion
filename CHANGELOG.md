@@ -23,6 +23,10 @@ adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 - Gestión de grupos: crear grupo (vía SECURITY DEFINER `crear_grupo()`),
   listado de mis grupos con rol, selector de grupo activo con persistencia
   en AsyncStorage. Cubre RF-010, RF-015 y RF-016.
+- Patrón recurrente: pantalla para configurar días, horarios (con
+  soporte para doble horario), offset de alarma y semanas a generar.
+  Cubre RF-040, RF-041 (vía trigger de DB) y RF-044. Tipos, API y
+  hooks de la feature.
 - Componentes UI base: `Button` (variantes primary/secondary/danger) y
   `LabeledInput` con la paleta del proyecto (indigo + slate).
 - Routing con Expo Router: grupos `(auth)` y `(app)` con guards de

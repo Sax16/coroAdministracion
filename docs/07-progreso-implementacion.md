@@ -33,13 +33,13 @@ semana", push notifications, ensayos, comunicados, cierre de asistencia.
 | **Crear grupo** | ✅ Implementado | Cubre RF-010. Vía SECURITY DEFINER `crear_grupo()` |
 | **Listado de mis grupos** | ✅ Implementado | Cubre RF-016. Con JOIN a `usuarios_grupos` filtrado por RLS |
 | **Selector de grupo activo** | ✅ Implementado | Cubre RF-015. Persistencia en AsyncStorage |
+| **Patrón recurrente semanal** | ✅ Implementado | Cubre RF-040, RF-041 (vía trigger de DB) y RF-044. UI por día con chips de horarios |
 | Routing Expo | ✅ Estructura | Grupos `(auth)` y `(app)` con guards de redirección |
 
 ### Lo que FALTA para MVP (siguiente sprint) 🟡
 
 | Prioridad | Feature | RF-### | Depende de |
 |---|---|---|---|
-| 🟥 MUST | Patrón recurrente + generación de servicios | RF-040, RF-041, RF-044 | Migración aplicada |
 | 🟥 MUST | Asignaciones semanales | RF-050, RF-051, RF-052 | Servicios generados |
 | 🟥 MUST | Pantalla "Mi semana" + scheduler de alarmas | RF-054, RF-055, RF-063, RF-064 | Asignaciones |
 | 🟥 MUST | Push notifications via Edge Function | RF-060, RF-061, RF-062, RF-083, RF-085 | Servicios + auth |
@@ -168,9 +168,10 @@ los 3 argumentos completos para que un futuro dev no reabra la discusión.
 3. ✅ ~~Auth: implementar login + register + signOut~~ (commiteado)
 4. ✅ ~~Crear grupo: pantalla + integración con `crear_grupo()`~~ (commiteado)
 5. ✅ ~~Selector de grupo activo: store + persistencia en AsyncStorage~~ (commiteado)
-6. 🟡 Aplicar la migración al proyecto Supabase dev (`supabase db push` o dashboard)
-7. 🟡 Generar tipos de TypeScript con `supabase gen types typescript`
-8. 🟡 Smoke test E2E: registrar → crear grupo → verlo en el listado
+6. ✅ ~~Patrón recurrente: pantalla + API + hooks~~ (commiteado)
+7. 🟡 Aplicar la migración al proyecto Supabase dev (`supabase db push` o dashboard)
+8. 🟡 Generar tipos de TypeScript con `supabase gen types typescript`
+9. 🟡 Smoke test E2E: registrar → crear grupo → configurar patrón → ver servicios generados
 
 ### Corto plazo (siguiente sprint)
 
