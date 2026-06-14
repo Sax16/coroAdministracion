@@ -102,7 +102,7 @@ export default function GruposScreen() {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
           renderItem={({ item }) => (
-            <Link href={`/(app)/grupos/${item.id}`} asChild>
+            <Link href={`/(app)/grupos/${item.id}/patron`} asChild>
               <Pressable className="rounded-lg border border-slate-200 bg-white p-4 active:bg-slate-50">
                 <View className="flex-row items-center justify-between">
                   <Text className="text-base font-semibold text-slate-900">
@@ -125,6 +125,11 @@ export default function GruposScreen() {
                 {item.descripcion ? (
                   <Text className="mt-1 text-sm text-slate-500">
                     {item.descripcion}
+                  </Text>
+                ) : null}
+                {item.rol === 'admin' ? (
+                  <Text className="mt-2 text-xs font-medium text-primary-600">
+                    Configurar patrón de servicios →
                   </Text>
                 ) : null}
               </Pressable>
