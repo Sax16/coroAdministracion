@@ -13,35 +13,42 @@
 **MVP (v0.1.0) — fase inicial.** La documentación base está completa y
 validada con el Product Owner. El bootstrap técnico está hecho. La primera
 migración SQL (DDL + RLS + lógica + vistas) está commiteada y lista para
-aplicarse al proyecto Supabase. Falta la mayor parte del código de producto
-(Auth, grupos, asignaciones, etc.).
+aplicarse al proyecto Supabase. **Auth y gestión básica de grupos ya están
+implementados** (login, register, signOut, crear grupo, listado con rol,
+selector de grupo activo). Falta: patrón recurrente, asignaciones, "Mi
+semana", push notifications, ensayos, comunicados, cierre de asistencia.
 
 ### Lo que YA está hecho ✅
 
 | Área | Estado | Detalle |
 |---|---|---|
-| Docs de producto | ✅ Completo | 7 documentos, auditados y corregidos (ver `CHANGELOG-AUDITORIA.md`) |
+| Docs de producto | ✅ Completo | 7 documentos + `07-progreso-implementacion.md`, auditados y corregidos |
 | Bootstrap Expo | ✅ Completo | SDK 56 + TS strict + NativeWind + Expo Router |
-| Cliente Supabase | ✅ Wireado | `src/lib/supabase.ts` con AsyncStorage, ping en `app/index.tsx` |
+| Cliente Supabase | ✅ Wireado | `src/lib/supabase.ts` con AsyncStorage |
 | Migración inicial | ✅ Commiteada | `20260614000000_initial_schema.sql` (1.255 líneas) |
 | Script reset dev | ✅ Commiteado | `supabase/scripts/reset_dev.sql` con header destructivo |
-| `CHANGELOG.md` raíz | ✅ Creado | Formato Keep a Changelog, con sección Unreleased |
-| Estructura features | ✅ Carpeta creada | `src/features/{auth,grupos,miembros,...}` (vacías, listas) |
+| `CHANGELOG.md` raíz | ✅ Creado | Formato Keep a Changelog |
+| Componentes UI base | ✅ Creado | `Button` y `LabeledInput` con paleta del proyecto |
+| **Auth (login/register/logout)** | ✅ Implementado | Cubre RF-001, RF-002, RF-003. Store + API + hooks + pantallas |
+| **Crear grupo** | ✅ Implementado | Cubre RF-010. Vía SECURITY DEFINER `crear_grupo()` |
+| **Listado de mis grupos** | ✅ Implementado | Cubre RF-016. Con JOIN a `usuarios_grupos` filtrado por RLS |
+| **Selector de grupo activo** | ✅ Implementado | Cubre RF-015. Persistencia en AsyncStorage |
+| Routing Expo | ✅ Estructura | Grupos `(auth)` y `(app)` con guards de redirección |
 
 ### Lo que FALTA para MVP (siguiente sprint) 🟡
 
 | Prioridad | Feature | RF-### | Depende de |
 |---|---|---|---|
-| 🟥 MUST | Auth (login + register) | RF-001, RF-002, RF-004 | Migración aplicada + proyecto Supabase dev |
-| 🟥 MUST | Crear grupo + seleccionar grupo activo | RF-010, RF-015, RF-016 | Auth |
-| 🟥 MUST | Patrón recurrente + generación de servicios | RF-040, RF-041 | Crear grupo |
+| 🟥 MUST | Patrón recurrente + generación de servicios | RF-040, RF-041, RF-044 | Migración aplicada |
 | 🟥 MUST | Asignaciones semanales | RF-050, RF-051, RF-052 | Servicios generados |
 | 🟥 MUST | Pantalla "Mi semana" + scheduler de alarmas | RF-054, RF-055, RF-063, RF-064 | Asignaciones |
 | 🟥 MUST | Push notifications via Edge Function | RF-060, RF-061, RF-062, RF-083, RF-085 | Servicios + auth |
-| 🟧 SHOULD | Ensayos | RF-070 → RF-076 | Servicios (paralelizable) |
-| 🟧 SHOULD | Comunicados | RF-080 → RF-084 | Paralelizable |
+| 🟥 MUST | Home del grupo (post-selección de grupo activo) | (nuevo) | Selector de grupo activo |
+| 🟧 SHOULD | Ensayos | RF-070 → RF-076 | (paralelizable) |
+| 🟧 SHOULD | Comunicados | RF-080 → RF-084 | (paralelizable) |
 | 🟧 SHOULD | Cierre de asistencia + justificaciones | RF-090 → RF-097 | Asignaciones |
 | 🟧 SHOULD | Eliminar cuenta con validaciones | RF-006 | Auth + grupos |
+| 🟧 SHOULD | Solicitar unirse a grupo existente | RF-020 → RF-023 | Auth |
 
 ## 2. Decisiones técnicas tomadas durante implementación
 
@@ -158,25 +165,27 @@ los 3 argumentos completos para que un futuro dev no reabra la discusión.
 
 1. ✅ ~~Migración inicial consolidada + script reset~~ (commiteado)
 2. ✅ ~~Documentación de progreso~~ (este doc + CHANGELOG raíz)
-3. 🟡 Verificar si el proyecto Supabase dev está creado y con keys en `.env`
-4. 🟡 Generar tipos de TypeScript con `supabase gen types typescript`
-5. 🟡 Auth: implementar login + register
-6. 🟡 Crear grupo: pantalla + integración con `crear_grupo()`
-7. 🟡 Selector de grupo activo: store + pantalla de listado
+3. ✅ ~~Auth: implementar login + register + signOut~~ (commiteado)
+4. ✅ ~~Crear grupo: pantalla + integración con `crear_grupo()`~~ (commiteado)
+5. ✅ ~~Selector de grupo activo: store + persistencia en AsyncStorage~~ (commiteado)
+6. 🟡 Aplicar la migración al proyecto Supabase dev (`supabase db push` o dashboard)
+7. 🟡 Generar tipos de TypeScript con `supabase gen types typescript`
+8. 🟡 Smoke test E2E: registrar → crear grupo → verlo en el listado
 
 ### Corto plazo (siguiente sprint)
 
-8. Patrón recurrente: UI + guardar en `patrones_recurrentes` (el trigger
+9. Patrón recurrente: UI + guardar en `patrones_recurrentes` (el trigger
    se encarga de la generación)
-9. Asignaciones semanales: vista semanal + asignación
-10. "Mi semana" con scheduler de alarmas
-11. Push notifications (Edge Function + `dispositivos` table)
+10. Asignaciones semanales: vista semanal + asignación
+11. "Mi semana" con scheduler de alarmas
+12. Push notifications (Edge Function + `dispositivos` table)
+13. Home del grupo (post-selección de grupo activo)
 
 ### Antes de beta
 
-12. Ensayos, comunicados, cierre de asistencia
-13. Smoke test en TestFlight + Play Internal con 3-5 grupos reales
-14. Validación de RLS con tests de seguridad
+14. Ensayos, comunicados, cierre de asistencia
+15. Smoke test en TestFlight + Play Internal con 3-5 grupos reales
+16. Validación de RLS con tests de seguridad
 
 ## 5. Riesgos abiertos
 

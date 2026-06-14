@@ -16,13 +16,33 @@ adhiere a [Semantic Versioning](https://semver.org/lang/es/).
   5 SECURITY DEFINER ops, 2 vistas y triggers de generación y mantenimiento.
 - `supabase/scripts/reset_dev.sql` para resetear el dev DB (destructivo).
 - Doc `docs/07-progreso-implementacion.md` con bitácora de implementación.
+- `CHANGELOG.md` raíz con formato Keep a Changelog.
+- Auth funcional: login, registro y sign-out contra Supabase. Cubre
+  RF-001, RF-002 y RF-003 del MVP. Store de Zustand con hidratación al
+  montar la app y suscripción a `onAuthStateChange`.
+- Gestión de grupos: crear grupo (vía SECURITY DEFINER `crear_grupo()`),
+  listado de mis grupos con rol, selector de grupo activo con persistencia
+  en AsyncStorage. Cubre RF-010, RF-015 y RF-016.
+- Componentes UI base: `Button` (variantes primary/secondary/danger) y
+  `LabeledInput` con la paleta del proyecto (indigo + slate).
+- Routing con Expo Router: grupos `(auth)` y `(app)` con guards de
+  redirección según estado de auth.
 
 ### Changed
 - `.env.example` actualizado a la nomenclatura actual de keys de Supabase
   (publishable / secret en vez de anon / service_role).
+- `app/index.tsx` ya no hace ping de Supabase (eso era un smoke test del
+  bootstrap). Ahora es el router que decide a dónde ir según auth.
+- `app/_layout.tsx` ahora llama a `auth.hydrate()` al montar.
+- `.gitignore` ignora `.mavis/` (runtime local de Mavis).
 
 ### Fixed
-- (Ninguno todavía en este release)
+- Policy de INSERT en `public.perfiles` permite `auth.uid() IS NULL` para
+  que el trigger `handle_new_user()` corra sin sesión de usuario. CRIT-1
+  del doc 04, que la implementación previa tenía mal.
+- `generar_servicios_desde_patron()` hace JOIN con `public.grupos` para
+  obtener `zona_horaria` (en el doc 04 se referenciaba como
+  `new.zona_horaria`, pero esa columna no existe en `patrones_recurrentes`).
 
 ## [0.1.0] — 2026-06-10 — Documentación base
 
