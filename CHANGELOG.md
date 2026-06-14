@@ -47,6 +47,11 @@ adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 - `generar_servicios_desde_patron()` hace JOIN con `public.grupos` para
   obtener `zona_horaria` (en el doc 04 se referenciaba como
   `new.zona_horaria`, pero esa columna no existe en `patrones_recurrentes`).
+- **Migración reescrita para ser idempotente** (F-04): enums con DO block
+  sobre `pg_type`, constraints con DO block sobre `pg_constraint`, triggers
+  y policies con `DROP IF EXISTS` antes, tablas e índices con
+  `IF NOT EXISTS`. Ahora se puede reaplicar la migración y es compatible
+  con `supabase db reset`.
 
 ## [0.1.0] — 2026-06-10 — Documentación base
 

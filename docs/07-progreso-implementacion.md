@@ -159,6 +159,39 @@ SECURITY DEFINER ops que tocan `grupos.admin_id` (`crear_grupo()` y
 `transferir_admin()`). Documentado en el cuerpo de la migración con
 los 3 argumentos completos para que un futuro dev no reabra la discusión.
 
+### F-04 · Migración no era idempotente: SQLSTATE 42710 al reaplicar
+
+**Síntoma:** al aplicar la migración una segunda vez (ej. después de un
+intento fallido a mitad, o un `supabase db reset`), PostgreSQL tiraba
+`ERROR: type "rol_grupo_enum" already exists (SQLSTATE 42710)`. Igual
+pasaba con tablas, constraints, triggers y policies.
+
+**Origen:** la primera versión usaba `CREATE TYPE`, `CREATE TABLE`,
+`CREATE TRIGGER`, `CREATE POLICY` directos, que fallan si el objeto ya
+existe. No es una "primera migración idempotente" en el sentido estricto
+(las tablas se crean con `IF NOT EXISTS` pero los enums/triggers/policies
+necesitan patrones distintos en PostgreSQL).
+
+**Fix aplicado en:** `20260614000000_initial_schema.sql` — reescritura
+completa con patrones idempotentes:
+
+- **Enums:** DO block con check de `pg_type.typname` (PostgreSQL no
+  soporta `CREATE TYPE IF NOT EXISTS`).
+- **Tablas:** `CREATE TABLE IF NOT EXISTS`.
+- **Constraints (CHECK, UK):** DO block con check de `pg_constraint.conname`.
+- **Índices:** `CREATE INDEX IF NOT EXISTS` (soportado nativamente).
+- **Partial unique index:** `CREATE UNIQUE INDEX IF NOT EXISTS` (igual).
+- **Triggers:** `DROP TRIGGER IF EXISTS ... ON table; CREATE TRIGGER ...`
+  antes de cada uno.
+- **Policies:** `DROP POLICY IF EXISTS ... ON table; CREATE POLICY ...`
+  antes de cada una.
+- **Functions / Views:** `CREATE OR REPLACE` (ya lo estaban).
+- **`ALTER TABLE ... ENABLE ROW LEVEL SECURITY`:** idempotente nativo.
+
+**Beneficio:** la migración ahora es 100% re-aplicable. Compatible con
+`supabase db reset` (que borra todo y reaplica las migraciones desde
+cero) y con intentos de "intentar de nuevo" si algo falla a mitad.
+
 ## 4. Próximos pasos concretos
 
 ### Inmediato (esta sesión)

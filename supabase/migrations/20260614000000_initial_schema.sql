@@ -4,11 +4,27 @@
 -- Migración completa: DDL + RLS + Triggers de generación + Vistas + SECURITY DEFINER ops.
 -- Generado a partir de docs/04-modelo-de-datos.md
 -- Cobertura: 14 tablas, multi-tenant estricto, 4 helper functions, 5 SECURITY DEFINER
--- ops, 2 vistas, triggers de generación de servicios y de mantenimiento.
+-- ops, 2 vistas, triggers de generación y mantenimiento.
 --
--- Re-ejecutable: funciones y triggers usan CREATE OR REPLACE. Las tablas NO son
--- idempotentes (es la migración inicial). Si necesitás resetear la base de datos
--- en dev, ver supabase/scripts/reset_dev.sql (NO usar en producción).
+-- IDEMPOTENTE: puede aplicarse múltiples veces sin error. Esto es compatible
+-- con `supabase db reset` (que borra todo y reaplica las migraciones).
+-- Patrones usados:
+--   * Enums: DO block con check de pg_type (PostgreSQL no soporta
+--     CREATE TYPE IF NOT EXISTS).
+--   * Tablas: CREATE TABLE IF NOT EXISTS.
+--   * Constraints (CHECK, FK, UK): DO block con check de pg_constraint.
+--   * Índices: CREATE INDEX IF NOT EXISTS.
+--   * Triggers: DROP TRIGGER IF EXISTS antes de CREATE.
+--   * Policies: DROP POLICY IF EXISTS antes de CREATE.
+--   * Functions: CREATE OR REPLACE.
+--   * Views: CREATE OR REPLACE.
+--   * ALTER TABLE ... ENABLE ROW LEVEL SECURITY: idempotente nativo.
+--
+-- Para resetear el dev DB y volver a aplicar limpio:
+--   supabase db reset
+-- O manualmente:
+--   psql "$DATABASE_URL" -f supabase/scripts/reset_dev.sql
+--   psql "$DATABASE_URL" -f supabase/migrations/20260614000000_initial_schema.sql
 -- =============================================================================
 
 
@@ -19,17 +35,61 @@ create extension if not exists "pgcrypto";
 
 
 -- =============================================================================
--- 2. ENUMS
+-- 2. ENUMS (idempotentes vía DO block)
 -- =============================================================================
-create type rol_grupo_enum                 as enum ('admin', 'miembro');
-create type estado_membresia_enum          as enum ('activo', 'inactivo');
-create type estado_solicitud_enum          as enum ('pendiente', 'aprobada', 'rechazada');
-create type tipo_evento_enum               as enum ('servicio', 'ensayo', 'comunicado');
-create type estado_evento_enum             as enum ('programado', 'cancelado', 'realizado');
-create type rol_servicio_enum              as enum ('cantante', 'musico', 'limpieza');
-create type estado_asistencia_enum         as enum ('asistio', 'no_asistio', 'justificado');
-create type estado_asistencia_ensayo_enum  as enum ('asistio', 'no_asistio');
-create type plataforma_enum                as enum ('ios', 'android');
+do $$ begin
+  if not exists (select 1 from pg_type where typname = 'rol_grupo_enum') then
+    create type rol_grupo_enum as enum ('admin', 'miembro');
+  end if;
+end $$;
+
+do $$ begin
+  if not exists (select 1 from pg_type where typname = 'estado_membresia_enum') then
+    create type estado_membresia_enum as enum ('activo', 'inactivo');
+  end if;
+end $$;
+
+do $$ begin
+  if not exists (select 1 from pg_type where typname = 'estado_solicitud_enum') then
+    create type estado_solicitud_enum as enum ('pendiente', 'aprobada', 'rechazada');
+  end if;
+end $$;
+
+do $$ begin
+  if not exists (select 1 from pg_type where typname = 'tipo_evento_enum') then
+    create type tipo_evento_enum as enum ('servicio', 'ensayo', 'comunicado');
+  end if;
+end $$;
+
+do $$ begin
+  if not exists (select 1 from pg_type where typname = 'estado_evento_enum') then
+    create type estado_evento_enum as enum ('programado', 'cancelado', 'realizado');
+  end if;
+end $$;
+
+do $$ begin
+  if not exists (select 1 from pg_type where typname = 'rol_servicio_enum') then
+    create type rol_servicio_enum as enum ('cantante', 'musico', 'limpieza');
+  end if;
+end $$;
+
+do $$ begin
+  if not exists (select 1 from pg_type where typname = 'estado_asistencia_enum') then
+    create type estado_asistencia_enum as enum ('asistio', 'no_asistio', 'justificado');
+  end if;
+end $$;
+
+do $$ begin
+  if not exists (select 1 from pg_type where typname = 'estado_asistencia_ensayo_enum') then
+    create type estado_asistencia_ensayo_enum as enum ('asistio', 'no_asistio');
+  end if;
+end $$;
+
+do $$ begin
+  if not exists (select 1 from pg_type where typname = 'plataforma_enum') then
+    create type plataforma_enum as enum ('ios', 'android');
+  end if;
+end $$;
 
 
 -- =============================================================================
@@ -37,7 +97,7 @@ create type plataforma_enum                as enum ('ios', 'android');
 -- =============================================================================
 
 -- 3.1 perfiles: 1:1 con auth.users (datos personales, sin grupo_id)
-create table public.perfiles (
+create table if not exists public.perfiles (
   id          uuid primary key references auth.users(id) on delete cascade,
   nombre      text not null,
   apellido    text not null,
@@ -49,7 +109,7 @@ create table public.perfiles (
 );
 
 -- 3.2 grupos
-create table public.grupos (
+create table if not exists public.grupos (
   id            uuid primary key default gen_random_uuid(),
   nombre        text not null,
   descripcion   text,
@@ -61,7 +121,7 @@ create table public.grupos (
 );
 
 -- 3.3 usuarios_grupos: pertenencia + rol + estado
-create table public.usuarios_grupos (
+create table if not exists public.usuarios_grupos (
   id            uuid primary key default gen_random_uuid(),
   usuario_id    uuid not null references public.perfiles(id) on delete cascade,
   grupo_id      uuid not null references public.grupos(id) on delete cascade,
@@ -74,7 +134,7 @@ create table public.usuarios_grupos (
 );
 
 -- 3.4 solicitudes_grupo
-create table public.solicitudes_grupo (
+create table if not exists public.solicitudes_grupo (
   id             uuid primary key default gen_random_uuid(),
   grupo_id       uuid not null references public.grupos(id) on delete cascade,
   usuario_id     uuid not null references public.perfiles(id) on delete cascade,
@@ -86,7 +146,7 @@ create table public.solicitudes_grupo (
 );
 
 -- 3.5 patrones_recurrentes: 1:1 con grupos
-create table public.patrones_recurrentes (
+create table if not exists public.patrones_recurrentes (
   id                uuid primary key default gen_random_uuid(),
   grupo_id          uuid not null unique references public.grupos(id) on delete cascade,
   configuracion     jsonb not null,
@@ -96,7 +156,7 @@ create table public.patrones_recurrentes (
 );
 
 -- 3.6 servicios
-create table public.servicios (
+create table if not exists public.servicios (
   id                     uuid primary key default gen_random_uuid(),
   grupo_id               uuid not null references public.grupos(id) on delete cascade,
   tipo                   tipo_evento_enum not null,
@@ -116,7 +176,7 @@ create table public.servicios (
 );
 
 -- 3.7 asignaciones_servicio
-create table public.asignaciones_servicio (
+create table if not exists public.asignaciones_servicio (
   id               uuid primary key default gen_random_uuid(),
   servicio_id      uuid not null references public.servicios(id) on delete cascade,
   usuario_grupo_id uuid not null references public.usuarios_grupos(id) on delete cascade,
@@ -126,7 +186,7 @@ create table public.asignaciones_servicio (
 );
 
 -- 3.8 estados_asistencia_servicio (1:1 con asignaciones, creada al asignar)
-create table public.estados_asistencia_servicio (
+create table if not exists public.estados_asistencia_servicio (
   id            uuid primary key default gen_random_uuid(),
   asignacion_id uuid not null unique references public.asignaciones_servicio(id) on delete cascade,
   estado        estado_asistencia_enum not null default 'asistio',
@@ -135,7 +195,7 @@ create table public.estados_asistencia_servicio (
 );
 
 -- 3.9 justificaciones_servicio
-create table public.justificaciones_servicio (
+create table if not exists public.justificaciones_servicio (
   id               uuid primary key default gen_random_uuid(),
   servicio_id      uuid not null references public.servicios(id) on delete cascade,
   usuario_grupo_id uuid not null references public.usuarios_grupos(id) on delete cascade,
@@ -145,7 +205,7 @@ create table public.justificaciones_servicio (
 );
 
 -- 3.10 ensayos
-create table public.ensayos (
+create table if not exists public.ensayos (
   id                     uuid primary key default gen_random_uuid(),
   grupo_id               uuid not null references public.grupos(id) on delete cascade,
   titulo                 text not null,
@@ -164,7 +224,7 @@ create table public.ensayos (
 );
 
 -- 3.11 invitados_ensayo
-create table public.invitados_ensayo (
+create table if not exists public.invitados_ensayo (
   id               uuid primary key default gen_random_uuid(),
   ensayo_id        uuid not null references public.ensayos(id) on delete cascade,
   usuario_grupo_id uuid not null references public.usuarios_grupos(id) on delete cascade,
@@ -173,7 +233,7 @@ create table public.invitados_ensayo (
 );
 
 -- 3.12 asistencias_ensayo
-create table public.asistencias_ensayo (
+create table if not exists public.asistencias_ensayo (
   id             uuid primary key default gen_random_uuid(),
   invitacion_id  uuid not null unique references public.invitados_ensayo(id) on delete cascade,
   estado         estado_asistencia_ensayo_enum not null,
@@ -182,7 +242,7 @@ create table public.asistencias_ensayo (
 );
 
 -- 3.13 comunicados
-create table public.comunicados (
+create table if not exists public.comunicados (
   id           uuid primary key default gen_random_uuid(),
   grupo_id     uuid not null references public.grupos(id) on delete cascade,
   titulo       text not null,
@@ -193,7 +253,7 @@ create table public.comunicados (
 );
 
 -- 3.14 dispositivos (por usuario, no por grupo)
-create table public.dispositivos (
+create table if not exists public.dispositivos (
   id               uuid primary key default gen_random_uuid(),
   usuario_id       uuid not null references public.perfiles(id) on delete cascade,
   expo_push_token  text not null unique,
@@ -207,34 +267,56 @@ create table public.dispositivos (
 
 -- =============================================================================
 -- 4. CONSTRAINTS, CHECKS, UNIQUE KEYS
+-- (Idempotente vía DO block con check de pg_constraint)
 -- =============================================================================
 
 -- 4.1 Checks de fechas
-alter table public.servicios
-  add constraint chk_serv_fechas
-  check (fecha_fin is null or fecha_fin >= fecha_inicio);
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'chk_serv_fechas') then
+    alter table public.servicios
+      add constraint chk_serv_fechas
+      check (fecha_fin is null or fecha_fin >= fecha_inicio);
+  end if;
+end $$;
 
-alter table public.ensayos
-  add constraint chk_ens_fechas
-  check (fecha_fin is null or fecha_fin >= fecha_inicio);
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'chk_ens_fechas') then
+    alter table public.ensayos
+      add constraint chk_ens_fechas
+      check (fecha_fin is null or fecha_fin >= fecha_inicio);
+  end if;
+end $$;
 
 -- 4.2 Checks de patrón recurrente
-alter table public.patrones_recurrentes
-  add constraint chk_offset_pos
-  check (offset_alarma_min >= 0);
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'chk_offset_pos') then
+    alter table public.patrones_recurrentes
+      add constraint chk_offset_pos
+      check (offset_alarma_min >= 0);
+  end if;
+end $$;
 
-alter table public.patrones_recurrentes
-  add constraint chk_semanas_pos
-  check (semanas_generadas between 1 and 26);
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'chk_semanas_pos') then
+    alter table public.patrones_recurrentes
+      add constraint chk_semanas_pos
+      check (semanas_generadas between 1 and 26);
+  end if;
+end $$;
 
 -- 4.3 UK sobre servicios (necesario para ON CONFLICT del trigger de generación)
-alter table public.servicios
-  add constraint uq_servicios_grupo_fecha
-  unique (grupo_id, fecha_inicio);
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'uq_servicios_grupo_fecha') then
+    alter table public.servicios
+      add constraint uq_servicios_grupo_fecha
+      unique (grupo_id, fecha_inicio);
+  end if;
+end $$;
 
 -- 4.4 Partial unique index sobre solicitudes_grupo pendientes
--- (PostgreSQL no soporta UK parciales como constraint; usamos partial unique index)
-create unique index uq_solicitud_pendiente
+-- (PostgreSQL no soporta UK parciales como constraint; usamos partial unique index.
+--  create unique index if not exists es soportado nativamente.)
+create unique index if not exists uq_solicitud_pendiente
   on public.solicitudes_grupo (grupo_id, usuario_id)
   where estado = 'pendiente';
 
@@ -244,33 +326,33 @@ create unique index uq_solicitud_pendiente
 -- =============================================================================
 
 -- usuarios_grupos
-create index idx_usuarios_grupos_usuario on public.usuarios_grupos(usuario_id);
-create index idx_usuarios_grupos_grupo   on public.usuarios_grupos(grupo_id);
-create index idx_usuarios_grupos_activos on public.usuarios_grupos(grupo_id) where estado = 'activo';
+create index if not exists idx_usuarios_grupos_usuario on public.usuarios_grupos(usuario_id);
+create index if not exists idx_usuarios_grupos_grupo   on public.usuarios_grupos(grupo_id);
+create index if not exists idx_usuarios_grupos_activos on public.usuarios_grupos(grupo_id) where estado = 'activo';
 
 -- servicios
-create index idx_servicios_grupo_fecha on public.servicios(grupo_id, fecha_inicio);
-create index idx_servicios_estado      on public.servicios(estado) where estado = 'programado';
+create index if not exists idx_servicios_grupo_fecha on public.servicios(grupo_id, fecha_inicio);
+create index if not exists idx_servicios_estado      on public.servicios(estado) where estado = 'programado';
 
 -- asignaciones
-create index idx_asignaciones_servicio    on public.asignaciones_servicio(servicio_id);
-create index idx_asignaciones_ug          on public.asignaciones_servicio(usuario_grupo_id);
-create index idx_asignaciones_ug_servicio on public.asignaciones_servicio(usuario_grupo_id, servicio_id);
+create index if not exists idx_asignaciones_servicio    on public.asignaciones_servicio(servicio_id);
+create index if not exists idx_asignaciones_ug          on public.asignaciones_servicio(usuario_grupo_id);
+create index if not exists idx_asignaciones_ug_servicio on public.asignaciones_servicio(usuario_grupo_id, servicio_id);
 
 -- ensayos
-create index idx_ensayos_grupo_fecha on public.ensayos(grupo_id, fecha_inicio);
-create index idx_invitados_ensayo    on public.invitados_ensayo(ensayo_id);
+create index if not exists idx_ensayos_grupo_fecha on public.ensayos(grupo_id, fecha_inicio);
+create index if not exists idx_invitados_ensayo    on public.invitados_ensayo(ensayo_id);
 
 -- comunicados
-create index idx_comunicados_grupo_fecha        on public.comunicados(grupo_id, created_at desc);
-create index idx_comunicados_grupo_fecha_inicio on public.comunicados(grupo_id, fecha_inicio);
+create index if not exists idx_comunicados_grupo_fecha        on public.comunicados(grupo_id, created_at desc);
+create index if not exists idx_comunicados_grupo_fecha_inicio on public.comunicados(grupo_id, fecha_inicio);
 
 -- justificaciones
-create index idx_justificaciones_servicio   on public.justificaciones_servicio(servicio_id);
-create index idx_justificaciones_servicio_ug on public.justificaciones_servicio(servicio_id, usuario_grupo_id);
+create index if not exists idx_justificaciones_servicio    on public.justificaciones_servicio(servicio_id);
+create index if not exists idx_justificaciones_servicio_ug on public.justificaciones_servicio(servicio_id, usuario_grupo_id);
 
 -- dispositivos
-create index idx_dispositivos_usuario on public.dispositivos(usuario_id);
+create index if not exists idx_dispositivos_usuario on public.dispositivos(usuario_id);
 
 
 -- =============================================================================
@@ -355,55 +437,46 @@ $$;
 -- ----------------------------------------------------------------------------
 alter table public.perfiles enable row level security;
 
--- SELECT: el propio usuario ve su perfil
+drop policy if exists "perfiles: ver el propio" on public.perfiles;
 create policy "perfiles: ver el propio"
   on public.perfiles for select
   using (id = auth.uid());
 
--- INSERT: el propio usuario se inserta, o el trigger handle_new_user() corre
--- como service_role (RLS no aplica a service_role) o con auth.uid() = NULL
--- cuando lo dispara el sistema de auth. Por eso permitimos también
--- auth.uid() IS NULL (caso trigger).
+drop policy if exists "perfiles: insertar el propio o trigger" on public.perfiles;
 create policy "perfiles: insertar el propio o trigger"
   on public.perfiles for insert
   with check (id = auth.uid() or auth.uid() is null);
 
--- UPDATE: el propio usuario actualiza su perfil
+drop policy if exists "perfiles: actualizar el propio" on public.perfiles;
 create policy "perfiles: actualizar el propio"
   on public.perfiles for update
   using (id = auth.uid())
   with check (id = auth.uid());
 
 -- DELETE: solo service_role (no creamos policy; RLS bloquea todo lo demás).
--- El cascade desde auth.users.delete lo ejecuta service_role.
 
 -- ----------------------------------------------------------------------------
 -- 7.2 grupos
 -- ----------------------------------------------------------------------------
 alter table public.grupos enable row level security;
 
--- SELECT: solo miembros activos del grupo ven el grupo
+drop policy if exists "grupos: ver los de mi grupo" on public.grupos;
 create policy "grupos: ver los de mi grupo"
   on public.grupos for select
   using (id in (select public.usuario_grupos_activos(auth.uid())));
 
--- INSERT: cualquier usuario autenticado puede intentar. La restricción real
--- viene de la function crear_grupo() (SECURITY DEFINER), que es la única
--- ruta válida. Si alguien intenta un INSERT directo sin pasar por crear_grupo,
--- la fila de usuarios_grupos admin no existirá y las policies downstream
--- (sobre hijos) lo dejarán inaccesible de facto. Además, las SECURITY
--- DEFINER ops de la sección 10 mantienen la invariante admin_id ↔ ug.admin.
+drop policy if exists "grupos: insertar autenticado" on public.grupos;
 create policy "grupos: insertar autenticado"
   on public.grupos for insert
   with check (auth.role() = 'authenticated');
 
--- UPDATE: solo admin activo del grupo
+drop policy if exists "grupos: actualizar solo admin" on public.grupos;
 create policy "grupos: actualizar solo admin"
   on public.grupos for update
   using (public.usuario_es_admin_de(auth.uid(), id))
   with check (public.usuario_es_admin_de(auth.uid(), id));
 
--- DELETE: solo admin (el soft delete lo hace eliminar_grupo())
+drop policy if exists "grupos: eliminar solo admin (soft)" on public.grupos;
 create policy "grupos: eliminar solo admin (soft)"
   on public.grupos for delete
   using (public.usuario_es_admin_de(auth.uid(), id));
@@ -413,17 +486,15 @@ create policy "grupos: eliminar solo admin (soft)"
 -- ----------------------------------------------------------------------------
 alter table public.usuarios_grupos enable row level security;
 
+drop policy if exists "ug: ver los de mi grupo" on public.usuarios_grupos;
 create policy "ug: ver los de mi grupo"
   on public.usuarios_grupos for select
   using (grupo_id in (select public.usuario_grupos_activos(auth.uid())));
 
--- INSERT: caso A = fundador (admin de grupo recién creado) +
---         caso B = admin inserta a otro miembro.
+drop policy if exists "ug: insertar fundador o admin" on public.usuarios_grupos;
 create policy "ug: insertar fundador o admin"
   on public.usuarios_grupos for insert
   with check (
-    -- Caso A: el fundador se inserta a sí mismo como admin en un grupo
-    -- que acaba de crear.
     (
       usuario_id = auth.uid()
       and rol = 'admin'
@@ -435,18 +506,19 @@ create policy "ug: insertar fundador o admin"
       )
     )
     or
-    -- Caso B: un admin inserta a otro miembro en su grupo.
     (
       rol = 'miembro'
       and public.usuario_es_admin_de(auth.uid(), grupo_id)
     )
   );
 
+drop policy if exists "ug: actualizar solo admin" on public.usuarios_grupos;
 create policy "ug: actualizar solo admin"
   on public.usuarios_grupos for update
   using (public.usuario_es_admin_de(auth.uid(), grupo_id))
   with check (public.usuario_es_admin_de(auth.uid(), grupo_id));
 
+drop policy if exists "ug: eliminar solo admin" on public.usuarios_grupos;
 create policy "ug: eliminar solo admin"
   on public.usuarios_grupos for delete
   using (public.usuario_es_admin_de(auth.uid(), grupo_id));
@@ -456,7 +528,7 @@ create policy "ug: eliminar solo admin"
 -- ----------------------------------------------------------------------------
 alter table public.solicitudes_grupo enable row level security;
 
--- SELECT: admin del grupo ve todas las del grupo, el solicitante ve las suyas.
+drop policy if exists "solicitudes: ver las de mi grupo o las mias" on public.solicitudes_grupo;
 create policy "solicitudes: ver las de mi grupo o las mias"
   on public.solicitudes_grupo for select
   using (
@@ -464,16 +536,18 @@ create policy "solicitudes: ver las de mi grupo o las mias"
     or usuario_id = auth.uid()
   );
 
--- INSERT: el propio usuario se postula a un grupo.
+drop policy if exists "solicitudes: crear solo para mi mismo" on public.solicitudes_grupo;
 create policy "solicitudes: crear solo para mi mismo"
   on public.solicitudes_grupo for insert
   with check (usuario_id = auth.uid());
 
+drop policy if exists "solicitudes: actualizar solo admin" on public.solicitudes_grupo;
 create policy "solicitudes: actualizar solo admin"
   on public.solicitudes_grupo for update
   using (public.usuario_es_admin_de(auth.uid(), grupo_id))
   with check (public.usuario_es_admin_de(auth.uid(), grupo_id));
 
+drop policy if exists "solicitudes: eliminar solo admin" on public.solicitudes_grupo;
 create policy "solicitudes: eliminar solo admin"
   on public.solicitudes_grupo for delete
   using (public.usuario_es_admin_de(auth.uid(), grupo_id));
@@ -483,19 +557,23 @@ create policy "solicitudes: eliminar solo admin"
 -- ----------------------------------------------------------------------------
 alter table public.patrones_recurrentes enable row level security;
 
+drop policy if exists "patrones: ver los de mi grupo" on public.patrones_recurrentes;
 create policy "patrones: ver los de mi grupo"
   on public.patrones_recurrentes for select
   using (grupo_id in (select public.usuario_grupos_activos(auth.uid())));
 
+drop policy if exists "patrones: insertar solo admin" on public.patrones_recurrentes;
 create policy "patrones: insertar solo admin"
   on public.patrones_recurrentes for insert
   with check (public.usuario_es_admin_de(auth.uid(), grupo_id));
 
+drop policy if exists "patrones: actualizar solo admin" on public.patrones_recurrentes;
 create policy "patrones: actualizar solo admin"
   on public.patrones_recurrentes for update
   using (public.usuario_es_admin_de(auth.uid(), grupo_id))
   with check (public.usuario_es_admin_de(auth.uid(), grupo_id));
 
+drop policy if exists "patrones: eliminar solo admin" on public.patrones_recurrentes;
 create policy "patrones: eliminar solo admin"
   on public.patrones_recurrentes for delete
   using (public.usuario_es_admin_de(auth.uid(), grupo_id));
@@ -505,19 +583,23 @@ create policy "patrones: eliminar solo admin"
 -- ----------------------------------------------------------------------------
 alter table public.servicios enable row level security;
 
+drop policy if exists "servicios: ver los de mi grupo" on public.servicios;
 create policy "servicios: ver los de mi grupo"
   on public.servicios for select
   using (grupo_id in (select public.usuario_grupos_activos(auth.uid())));
 
+drop policy if exists "servicios: insertar solo admin" on public.servicios;
 create policy "servicios: insertar solo admin"
   on public.servicios for insert
   with check (public.usuario_es_admin_de(auth.uid(), grupo_id));
 
+drop policy if exists "servicios: actualizar solo admin" on public.servicios;
 create policy "servicios: actualizar solo admin"
   on public.servicios for update
   using (public.usuario_es_admin_de(auth.uid(), grupo_id))
   with check (public.usuario_es_admin_de(auth.uid(), grupo_id));
 
+drop policy if exists "servicios: eliminar solo admin (soft)" on public.servicios;
 create policy "servicios: eliminar solo admin (soft)"
   on public.servicios for delete
   using (public.usuario_es_admin_de(auth.uid(), grupo_id));
@@ -527,6 +609,7 @@ create policy "servicios: eliminar solo admin (soft)"
 -- ----------------------------------------------------------------------------
 alter table public.asignaciones_servicio enable row level security;
 
+drop policy if exists "asignaciones: ver las de mi grupo" on public.asignaciones_servicio;
 create policy "asignaciones: ver las de mi grupo"
   on public.asignaciones_servicio for select
   using (servicio_id in (
@@ -534,6 +617,7 @@ create policy "asignaciones: ver las de mi grupo"
     where grupo_id in (select public.usuario_grupos_activos(auth.uid()))
   ));
 
+drop policy if exists "asignaciones: insertar solo admin" on public.asignaciones_servicio;
 create policy "asignaciones: insertar solo admin"
   on public.asignaciones_servicio for insert
   with check (servicio_id in (
@@ -542,6 +626,7 @@ create policy "asignaciones: insertar solo admin"
       and public.usuario_es_admin_de(auth.uid(), grupo_id)
   ));
 
+drop policy if exists "asignaciones: actualizar solo admin" on public.asignaciones_servicio;
 create policy "asignaciones: actualizar solo admin"
   on public.asignaciones_servicio for update
   using (servicio_id in (
@@ -553,6 +638,7 @@ create policy "asignaciones: actualizar solo admin"
     where public.usuario_es_admin_de(auth.uid(), grupo_id)
   ));
 
+drop policy if exists "asignaciones: eliminar solo admin" on public.asignaciones_servicio;
 create policy "asignaciones: eliminar solo admin"
   on public.asignaciones_servicio for delete
   using (servicio_id in (
@@ -565,6 +651,7 @@ create policy "asignaciones: eliminar solo admin"
 -- ----------------------------------------------------------------------------
 alter table public.justificaciones_servicio enable row level security;
 
+drop policy if exists "justificaciones: ver las de mi grupo" on public.justificaciones_servicio;
 create policy "justificaciones: ver las de mi grupo"
   on public.justificaciones_servicio for select
   using (servicio_id in (
@@ -572,6 +659,7 @@ create policy "justificaciones: ver las de mi grupo"
     where grupo_id in (select public.usuario_grupos_activos(auth.uid()))
   ));
 
+drop policy if exists "justificaciones: insertar solo para mi mismo" on public.justificaciones_servicio;
 create policy "justificaciones: insertar solo para mi mismo"
   on public.justificaciones_servicio for insert
   with check (
@@ -582,6 +670,7 @@ create policy "justificaciones: insertar solo para mi mismo"
     )
   );
 
+drop policy if exists "justificaciones: actualizar solo para mi mismo" on public.justificaciones_servicio;
 create policy "justificaciones: actualizar solo para mi mismo"
   on public.justificaciones_servicio for update
   using (
@@ -599,6 +688,7 @@ create policy "justificaciones: actualizar solo para mi mismo"
     )
   );
 
+drop policy if exists "justificaciones: eliminar solo para mi mismo" on public.justificaciones_servicio;
 create policy "justificaciones: eliminar solo para mi mismo"
   on public.justificaciones_servicio for delete
   using (
@@ -614,6 +704,7 @@ create policy "justificaciones: eliminar solo para mi mismo"
 -- ----------------------------------------------------------------------------
 alter table public.estados_asistencia_servicio enable row level security;
 
+drop policy if exists "eas: ver los de mi grupo" on public.estados_asistencia_servicio;
 create policy "eas: ver los de mi grupo"
   on public.estados_asistencia_servicio for select
   using (asignacion_id in (
@@ -622,12 +713,14 @@ create policy "eas: ver los de mi grupo"
     where s.grupo_id in (select public.usuario_grupos_activos(auth.uid()))
   ));
 
+drop policy if exists "eas: insertar admin o responsable del servicio" on public.estados_asistencia_servicio;
 create policy "eas: insertar admin o responsable del servicio"
   on public.estados_asistencia_servicio for insert
   with check (public.usuario_puede_cerrar_servicio(auth.uid(), (
     select servicio_id from asignaciones_servicio where id = asignacion_id
   )));
 
+drop policy if exists "eas: actualizar admin o responsable del servicio" on public.estados_asistencia_servicio;
 create policy "eas: actualizar admin o responsable del servicio"
   on public.estados_asistencia_servicio for update
   using (public.usuario_puede_cerrar_servicio(auth.uid(), (
@@ -637,6 +730,7 @@ create policy "eas: actualizar admin o responsable del servicio"
     select servicio_id from asignaciones_servicio where id = asignacion_id
   )));
 
+drop policy if exists "eas: eliminar solo admin del grupo" on public.estados_asistencia_servicio;
 create policy "eas: eliminar solo admin del grupo"
   on public.estados_asistencia_servicio for delete
   using (asignacion_id in (
@@ -650,19 +744,23 @@ create policy "eas: eliminar solo admin del grupo"
 -- ----------------------------------------------------------------------------
 alter table public.ensayos enable row level security;
 
+drop policy if exists "ensayos: ver los de mi grupo" on public.ensayos;
 create policy "ensayos: ver los de mi grupo"
   on public.ensayos for select
   using (grupo_id in (select public.usuario_grupos_activos(auth.uid())));
 
+drop policy if exists "ensayos: insertar solo admin" on public.ensayos;
 create policy "ensayos: insertar solo admin"
   on public.ensayos for insert
   with check (public.usuario_es_admin_de(auth.uid(), grupo_id));
 
+drop policy if exists "ensayos: actualizar solo admin" on public.ensayos;
 create policy "ensayos: actualizar solo admin"
   on public.ensayos for update
   using (public.usuario_es_admin_de(auth.uid(), grupo_id))
   with check (public.usuario_es_admin_de(auth.uid(), grupo_id));
 
+drop policy if exists "ensayos: eliminar solo admin (soft)" on public.ensayos;
 create policy "ensayos: eliminar solo admin (soft)"
   on public.ensayos for delete
   using (public.usuario_es_admin_de(auth.uid(), grupo_id));
@@ -672,6 +770,7 @@ create policy "ensayos: eliminar solo admin (soft)"
 -- ----------------------------------------------------------------------------
 alter table public.invitados_ensayo enable row level security;
 
+drop policy if exists "invitados: ver los de mi grupo" on public.invitados_ensayo;
 create policy "invitados: ver los de mi grupo"
   on public.invitados_ensayo for select
   using (ensayo_id in (
@@ -679,6 +778,7 @@ create policy "invitados: ver los de mi grupo"
     where grupo_id in (select public.usuario_grupos_activos(auth.uid()))
   ));
 
+drop policy if exists "invitados: insertar solo admin" on public.invitados_ensayo;
 create policy "invitados: insertar solo admin"
   on public.invitados_ensayo for insert
   with check (ensayo_id in (
@@ -686,6 +786,7 @@ create policy "invitados: insertar solo admin"
     where public.usuario_es_admin_de(auth.uid(), grupo_id)
   ));
 
+drop policy if exists "invitados: actualizar solo admin" on public.invitados_ensayo;
 create policy "invitados: actualizar solo admin"
   on public.invitados_ensayo for update
   using (ensayo_id in (
@@ -697,6 +798,7 @@ create policy "invitados: actualizar solo admin"
     where public.usuario_es_admin_de(auth.uid(), grupo_id)
   ));
 
+drop policy if exists "invitados: eliminar solo admin" on public.invitados_ensayo;
 create policy "invitados: eliminar solo admin"
   on public.invitados_ensayo for delete
   using (ensayo_id in (
@@ -709,6 +811,7 @@ create policy "invitados: eliminar solo admin"
 -- ----------------------------------------------------------------------------
 alter table public.asistencias_ensayo enable row level security;
 
+drop policy if exists "asistencias_ens: ver las de mi grupo" on public.asistencias_ensayo;
 create policy "asistencias_ens: ver las de mi grupo"
   on public.asistencias_ensayo for select
   using (invitacion_id in (
@@ -717,12 +820,14 @@ create policy "asistencias_ens: ver las de mi grupo"
     where e.grupo_id in (select public.usuario_grupos_activos(auth.uid()))
   ));
 
+drop policy if exists "asistencias_ens: insertar admin o encargado del ensayo" on public.asistencias_ensayo;
 create policy "asistencias_ens: insertar admin o encargado del ensayo"
   on public.asistencias_ensayo for insert
   with check (public.usuario_puede_cerrar_ensayo(auth.uid(), (
     select ensayo_id from invitados_ensayo where id = invitacion_id
   )));
 
+drop policy if exists "asistencias_ens: actualizar admin o encargado del ensayo" on public.asistencias_ensayo;
 create policy "asistencias_ens: actualizar admin o encargado del ensayo"
   on public.asistencias_ensayo for update
   using (public.usuario_puede_cerrar_ensayo(auth.uid(), (
@@ -732,6 +837,7 @@ create policy "asistencias_ens: actualizar admin o encargado del ensayo"
     select ensayo_id from invitados_ensayo where id = invitacion_id
   )));
 
+drop policy if exists "asistencias_ens: eliminar solo admin del grupo" on public.asistencias_ensayo;
 create policy "asistencias_ens: eliminar solo admin del grupo"
   on public.asistencias_ensayo for delete
   using (invitacion_id in (
@@ -745,19 +851,23 @@ create policy "asistencias_ens: eliminar solo admin del grupo"
 -- ----------------------------------------------------------------------------
 alter table public.comunicados enable row level security;
 
+drop policy if exists "comunicados: ver los de mi grupo" on public.comunicados;
 create policy "comunicados: ver los de mi grupo"
   on public.comunicados for select
   using (grupo_id in (select public.usuario_grupos_activos(auth.uid())));
 
+drop policy if exists "comunicados: insertar solo admin" on public.comunicados;
 create policy "comunicados: insertar solo admin"
   on public.comunicados for insert
   with check (public.usuario_es_admin_de(auth.uid(), grupo_id));
 
+drop policy if exists "comunicados: actualizar solo admin" on public.comunicados;
 create policy "comunicados: actualizar solo admin"
   on public.comunicados for update
   using (public.usuario_es_admin_de(auth.uid(), grupo_id))
   with check (public.usuario_es_admin_de(auth.uid(), grupo_id));
 
+drop policy if exists "comunicados: eliminar solo admin" on public.comunicados;
 create policy "comunicados: eliminar solo admin"
   on public.comunicados for delete
   using (public.usuario_es_admin_de(auth.uid(), grupo_id));
@@ -767,19 +877,23 @@ create policy "comunicados: eliminar solo admin"
 -- ----------------------------------------------------------------------------
 alter table public.dispositivos enable row level security;
 
+drop policy if exists "dispositivos: ver los propios" on public.dispositivos;
 create policy "dispositivos: ver los propios"
   on public.dispositivos for select
   using (usuario_id = auth.uid());
 
+drop policy if exists "dispositivos: insertar los propios" on public.dispositivos;
 create policy "dispositivos: insertar los propios"
   on public.dispositivos for insert
   with check (usuario_id = auth.uid());
 
+drop policy if exists "dispositivos: actualizar los propios" on public.dispositivos;
 create policy "dispositivos: actualizar los propios"
   on public.dispositivos for update
   using (usuario_id = auth.uid())
   with check (usuario_id = auth.uid());
 
+drop policy if exists "dispositivos: eliminar los propios" on public.dispositivos;
 create policy "dispositivos: eliminar los propios"
   on public.dispositivos for delete
   using (usuario_id = auth.uid());
@@ -788,6 +902,7 @@ create policy "dispositivos: eliminar los propios"
 -- =============================================================================
 -- 8. TRIGGERS DE INTEGRIDAD (BEFORE)
 -- Garantizan invariantes que la RLS no puede expresar.
+-- (Idempotente: drop trigger if exists antes de cada create.)
 -- =============================================================================
 
 -- 8.1 Responsable de servicio debe ser miembro activo del grupo.
@@ -806,6 +921,7 @@ begin
 end;
 $$;
 
+drop trigger if exists trg_servicios_validar_responsable on public.servicios;
 create trigger trg_servicios_validar_responsable
   before insert or update of responsable_id, grupo_id on public.servicios
   for each row execute function public.validar_pertenencia_responsable();
@@ -826,6 +942,7 @@ begin
 end;
 $$;
 
+drop trigger if exists trg_ensayos_validar_encargado on public.ensayos;
 create trigger trg_ensayos_validar_encargado
   before insert or update of encargado_id, grupo_id on public.ensayos
   for each row execute function public.validar_pertenencia_encargado();
@@ -873,6 +990,7 @@ begin
 end;
 $$;
 
+drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
@@ -934,6 +1052,7 @@ begin
 end;
 $$;
 
+drop trigger if exists trg_patron_generar_servicios on public.patrones_recurrentes;
 create trigger trg_patron_generar_servicios
   after insert or update of configuracion, semanas_generadas on public.patrones_recurrentes
   for each row execute function public.generar_servicios_desde_patron();
@@ -953,6 +1072,7 @@ begin
 end;
 $$;
 
+drop trigger if exists trg_asignacion_crear_estado on public.asignaciones_servicio;
 create trigger trg_asignacion_crear_estado
   after insert on public.asignaciones_servicio
   for each row execute function public.crear_estado_asistencia_al_asignar();
@@ -970,38 +1090,47 @@ end;
 $$;
 
 -- Triggers de updated_at por tabla
+drop trigger if exists trg_perfiles_set_updated_at on public.perfiles;
 create trigger trg_perfiles_set_updated_at
   before update on public.perfiles
   for each row execute function public.tg_set_updated_at();
 
+drop trigger if exists trg_grupos_set_updated_at on public.grupos;
 create trigger trg_grupos_set_updated_at
   before update on public.grupos
   for each row execute function public.tg_set_updated_at();
 
+drop trigger if exists trg_usuarios_grupos_set_updated_at on public.usuarios_grupos;
 create trigger trg_usuarios_grupos_set_updated_at
   before update on public.usuarios_grupos
   for each row execute function public.tg_set_updated_at();
 
+drop trigger if exists trg_patrones_recurrentes_set_updated_at on public.patrones_recurrentes;
 create trigger trg_patrones_recurrentes_set_updated_at
   before update on public.patrones_recurrentes
   for each row execute function public.tg_set_updated_at();
 
+drop trigger if exists trg_servicios_set_updated_at on public.servicios;
 create trigger trg_servicios_set_updated_at
   before update on public.servicios
   for each row execute function public.tg_set_updated_at();
 
+drop trigger if exists trg_ensayos_set_updated_at on public.ensayos;
 create trigger trg_ensayos_set_updated_at
   before update on public.ensayos
   for each row execute function public.tg_set_updated_at();
 
+drop trigger if exists trg_dispositivos_set_updated_at on public.dispositivos;
 create trigger trg_dispositivos_set_updated_at
   before update on public.dispositivos
   for each row execute function public.tg_set_updated_at();
 
+drop trigger if exists trg_estados_asistencia_set_updated_at on public.estados_asistencia_servicio;
 create trigger trg_estados_asistencia_set_updated_at
   before update on public.estados_asistencia_servicio
   for each row execute function public.tg_set_updated_at();
 
+drop trigger if exists trg_asistencias_ensayo_set_updated_at on public.asistencias_ensayo;
 create trigger trg_asistencias_ensayo_set_updated_at
   before update on public.asistencias_ensayo
   for each row execute function public.tg_set_updated_at();
@@ -1034,9 +1163,6 @@ begin
   insert into public.patrones_recurrentes (grupo_id, configuracion)
   values (v_grupo_id, '{"dias": {"0":[],"1":[],"2":[],"3":[],"4":[],"5":[],"6":[]}}'::jsonb);
 
-  -- Validación defensiva: la fila admin de usuarios_grupos DEBE existir.
-  -- Es invariante por construcción, pero la hacemos explícita para que
-  -- la garantía sea resistente a refactors.
   if not exists (
     select 1 from public.usuarios_grupos ug
     where ug.usuario_id = auth.uid()
@@ -1245,7 +1371,7 @@ group by s.id;
 -- 12.1 notificar_evento: stub. La implementación real (v0.2.0) disparará
 -- la Edge Function de push notification cuando se cree/modifique/cancele
 -- un servicio, ensayo o comunicado. Por ahora solo dejamos la función
--- documentada para知道她 existirá.
+-- documentada para que se sepa que existirá.
 -- create or replace function public.notificar_evento() returns trigger
 -- language plpgsql as $$
 -- begin
