@@ -27,6 +27,12 @@ adhiere a [Semantic Versioning](https://semver.org/lang/es/).
   soporte para doble horario), offset de alarma y semanas a generar.
   Cubre RF-040, RF-041 (vía trigger de DB) y RF-044. Tipos, API y
   hooks de la feature.
+- Asignaciones semanales: vista semanal con navegación lunes→domingo
+  y 7 cards por día. Pantalla por servicio para asignar uno o varios
+  roles (cantante/músico/limpieza) a un miembro, con soporte para
+  múltiples roles simultáneos (RF-052) y edición granular (RF-053).
+  Cubre RF-050, RF-051, RF-052, RF-053. Tipos, API y hooks de la
+  feature.
 - Componentes UI base: `Button` (variantes primary/secondary/danger) y
   `LabeledInput` con la paleta del proyecto (indigo + slate).
 - Routing con Expo Router: grupos `(auth)` y `(app)` con guards de

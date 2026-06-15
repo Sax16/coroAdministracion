@@ -6,7 +6,7 @@
 > [`CHANGELOG.md`](../CHANGELOG.md) (que es por release), este doc es narrativo
 > y se actualiza conforme avanzamos.
 
-> Última actualización: 2026-06-14.
+> Última actualización: 2026-06-14 (sesión de Asignaciones).
 
 ## 1. Dónde estamos
 
@@ -34,6 +34,7 @@ semana", push notifications, ensayos, comunicados, cierre de asistencia.
 | **Listado de mis grupos** | ✅ Implementado | Cubre RF-016. Con JOIN a `usuarios_grupos` filtrado por RLS |
 | **Selector de grupo activo** | ✅ Implementado | Cubre RF-015. Persistencia en AsyncStorage |
 | **Patrón recurrente semanal** | ✅ Implementado | Cubre RF-040, RF-041 (vía trigger de DB) y RF-044. UI por día con chips de horarios |
+| **Asignaciones semanales** | ✅ Implementado | Cubre RF-050, RF-051, RF-052, RF-053. Vista semanal con navegación de semana, asignación multi-rol por miembro-servicio |
 | Routing Expo | ✅ Estructura | Grupos `(auth)` y `(app)` con guards de redirección |
 
 ### Lo que FALTA para MVP (siguiente sprint) 🟡
@@ -208,9 +209,9 @@ cero) y con intentos de "intentar de nuevo" si algo falla a mitad.
 
 ### Corto plazo (siguiente sprint)
 
-9. Patrón recurrente: UI + guardar en `patrones_recurrentes` (el trigger
+9. ✅ Patrón recurrente: UI + guardar en `patrones_recurrentes` (el trigger
    se encarga de la generación)
-10. Asignaciones semanales: vista semanal + asignación
+10. ✅ Asignaciones semanales: vista semanal + asignación
 11. "Mi semana" con scheduler de alarmas
 12. Push notifications (Edge Function + `dispositivos` table)
 13. Home del grupo (post-selección de grupo activo)
