@@ -80,6 +80,13 @@ adhiere a [Semantic Versioning](https://semver.org/lang/es/).
   RF-092, RF-093, RF-094, RF-095, RF-096, RF-097. La RLS valida
   quién puede cerrar/reabrir (helper `usuario_puede_cerrar_servicio`)
   y quién puede auto-justificarse (policy por usuario_grupo_id).
+- **Comunicados**: feature completa con listado cronológico,
+  crear, editar, eliminar y detalle. Cubre RF-080, RF-081, RF-082,
+  RF-083, RF-084. El push al publicar dispara
+  `notificarPush('comunicado_publicado')` que llega a todos los
+  miembros del grupo. No hay `autor_id` (cualquier admin puede
+  editar/eliminar cualquier comunicado, decisión de diseño MVP);
+  refinar a "solo el autor" en v0.2.0 si se agrega la columna.
 - Componentes UI base: `Button` (variantes primary/secondary/danger) y
   `LabeledInput` con la paleta del proyecto (indigo + slate).
 - Routing con Expo Router: grupos `(auth)` y `(app)` con guards de
