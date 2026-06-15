@@ -12,6 +12,7 @@ import {
 import { useEnsayosProximos } from '@/features/ensayos/hooks';
 import { useComunicados } from '@/features/comunicados/hooks';
 import { useServiciosSemana } from '@/features/asignaciones/hooks';
+import { useSolicitudesPendientes } from '@/features/solicitudes/hooks';
 import { GrupoConRol, listarMisGrupos } from '@/features/grupos/api';
 import { useAuthStore } from '@/stores/auth';
 import {
@@ -100,6 +101,9 @@ export default function GrupoHomeScreen() {
     loading: loadingCom,
     refetch: refetchCom,
   } = useComunicados(grupoId ?? '');
+
+  // Solicitudes pendientes (solo admins, RF-021)
+  const { solicitudes: solicitudesPendientes } = useSolicitudesPendientes(grupoId ?? '');
 
   const proximosServicios = useMemo(
     () => servicios.filter((s) => s.estado !== 'cancelado').slice(0, 3),
@@ -209,6 +213,19 @@ export default function GrupoHomeScreen() {
             ) : null}
             {esAdmin ? (
               <AccesoCard
+                titulo={
+                  solicitudesPendientes.length > 0
+                    ? `Solicitudes (${solicitudesPendientes.length})`
+                    : 'Solicitudes'
+                }
+                subtitulo="Inbox de ingresos pendientes"
+                emoji="📨"
+                color="rose"
+                onPress={() => router.push('/(app)/solicitudes')}
+              />
+            ) : null}
+            {esAdmin ? (
+              <AccesoCard
                 titulo="Patrón"
                 subtitulo="Configurar días y horarios"
                 emoji="⚙️"
@@ -300,7 +317,7 @@ interface AccesoCardProps {
   titulo: string;
   subtitulo: string;
   emoji: string;
-  color: 'indigo' | 'amber' | 'emerald' | 'slate';
+  color: 'indigo' | 'amber' | 'emerald' | 'slate' | 'rose';
   onPress: () => void;
 }
 
@@ -310,12 +327,14 @@ function AccesoCard({ titulo, subtitulo, emoji, color, onPress }: AccesoCardProp
     amber: 'border-amber-200 bg-amber-50',
     emerald: 'border-emerald-200 bg-emerald-50',
     slate: 'border-slate-200 bg-slate-50',
+    rose: 'border-rose-200 bg-rose-50',
   } as const;
   const textMap = {
     indigo: 'text-indigo-700',
     amber: 'text-amber-700',
     emerald: 'text-emerald-700',
     slate: 'text-slate-700',
+    rose: 'text-rose-700',
   } as const;
 
   return (

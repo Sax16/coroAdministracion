@@ -79,6 +79,13 @@ export default function GruposScreen() {
         </Pressable>
       </View>
 
+      <Pressable
+        onPress={() => router.push('/(app)/buscar-grupo')}
+        className="mx-4 mt-3 h-11 items-center justify-center rounded-lg border border-primary-600 active:bg-primary-50"
+      >
+        <Text className="text-sm font-semibold text-primary-600">+ Buscar otro grupo</Text>
+      </Pressable>
+
       {loading ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color="#4f46e5" />
