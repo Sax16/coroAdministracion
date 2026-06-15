@@ -73,6 +73,13 @@ adhiere a [Semantic Versioning](https://semver.org/lang/es/).
   (RF-075) queda para v0.2.0. Llamadas a `notificarPush()` ya
   integradas para ensayo_creado, ensayo_modificado, ensayo_cancelado
   y asignacion_nueva (cuando se invita a un miembro).
+- **Cierre de asistencia de servicio**: feature completa con
+  pantalla de cierre para el responsable/admin, pantalla de
+  justificación para el miembro, badges de estado en mi-semana,
+  CTA "Cerrar" en la vista semanal admin. Cubre RF-090, RF-091,
+  RF-092, RF-093, RF-094, RF-095, RF-096, RF-097. La RLS valida
+  quién puede cerrar/reabrir (helper `usuario_puede_cerrar_servicio`)
+  y quién puede auto-justificarse (policy por usuario_grupo_id).
 - Componentes UI base: `Button` (variantes primary/secondary/danger) y
   `LabeledInput` con la paleta del proyecto (indigo + slate).
 - Routing con Expo Router: grupos `(auth)` y `(app)` con guards de

@@ -6,7 +6,7 @@
 > [`CHANGELOG.md`](../CHANGELOG.md) (que es por release), este doc es narrativo
 > y se actualiza conforme avanzamos.
 
-> Última actualización: 2026-06-14 (sesión de Ensayos).
+> Última actualización: 2026-06-14 (sesión de Cierre de asistencia).
 
 ## 1. Dónde estamos
 
@@ -38,6 +38,7 @@ semana", push notifications, ensayos, comunicados, cierre de asistencia.
 | **Pantalla "Mi semana" + scheduler de alarmas** | ✅ Implementado | Cubre RF-054, RF-055, RF-063, RF-064. Vista 14 días con servicios del usuario, agenda alarmas locales con `expo-notifications`, pide `SCHEDULE_EXACT_ALARM` en Android 12+ |
 | **Push notifications (infra)** | ✅ Implementado | Edge Function `notificar-push` + tabla `notificaciones` + feature `dispositivos/` con `PushTokenRegistrar`. Cubre RF-060, RF-061, RF-062, RF-065, RF-066, RF-083, RF-085. RF-086 (limpieza de tokens) queda para v0.2.0 |
 | **Ensayos (CRUD + invitados)** | ✅ Implementado | Cubre RF-070, RF-071, RF-072, RF-073, RF-074. Listado, crear, editar, detalle, cancelar/reabrir, asignación de encargado, gestión de invitados. Push integrado. Cierre de asistencia (RF-075) queda para v0.2.0 |
+| **Cierre de asistencia de servicio** | ✅ Implementado | Cubre RF-090, RF-091, RF-092, RF-093, RF-094, RF-095, RF-096, RF-097. Pantalla de cierre para responsable/admin, pantalla de justificación para miembro, badges de estado en mi-semana, CTA cerrar en vista admin |
 | Routing Expo | ✅ Estructura | Grupos `(auth)` y `(app)` con guards de redirección |
 
 ### Lo que FALTA para MVP (siguiente sprint) 🟡
@@ -222,8 +223,8 @@ cero) y con intentos de "intentar de nuevo" si algo falla a mitad.
 ### Antes de beta
 
 14. ✅ Ensayos (CRUD + invitados, RF-070→074), cierre de asistencia RF-075 (v0.2.0)
-15. Comunicados (RF-080 → RF-084)
-16. Cierre de asistencia de servicio (RF-090 → RF-097)
+15. ✅ Cierre de asistencia de servicio (RF-090 → RF-097)
+16. Comunicados (RF-080 → RF-084)
 17. Smoke test en TestFlight + Play Internal con 3-5 grupos reales
 18. Validación de RLS con tests de seguridad
 
