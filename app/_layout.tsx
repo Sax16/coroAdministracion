@@ -5,7 +5,9 @@ import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import '../global.css';
 
+import { configureNotifications } from '@/lib/notifications';
 import { useAuthStore } from '@/stores/auth';
+import { useGrupoActivoStore } from '@/stores/grupoActivo';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -17,12 +19,15 @@ const queryClient = new QueryClient({
 });
 
 export default function RootLayout() {
-  const hydrate = useAuthStore((s) => s.hydrate);
+  const hydrateAuth = useAuthStore((s) => s.hydrate);
+  const hydrateGrupo = useGrupoActivoStore((s) => s.hydrate);
 
-  // Hidratar la sesión UNA sola vez al montar la app.
+  // Hidratar stores y configurar notificaciones UNA sola vez al montar la app.
   useEffect(() => {
-    void hydrate();
-  }, [hydrate]);
+    void hydrateAuth();
+    void hydrateGrupo();
+    configureNotifications();
+  }, [hydrateAuth, hydrateGrupo]);
 
   return (
     <QueryClientProvider client={queryClient}>

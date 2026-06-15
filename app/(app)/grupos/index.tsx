@@ -5,18 +5,22 @@ import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } fr
 import { useSignOut } from '@/features/auth/hooks';
 import { GrupoConRol, listarMisGrupos } from '@/features/grupos/api';
 import { useAuthStore } from '@/stores/auth';
+import { useGrupoActivoStore } from '@/stores/grupoActivo';
 
 /**
  * Pantalla principal post-login: lista de grupos del usuario.
  *
  * RF-016: el usuario ve todos los grupos a los que pertenece y su rol.
- * RF-015: el selector de grupo activo (multi-grupo) se implementa
- * en el store `grupoActivo`. Por ahora, al tocar un grupo se navega
- * a su home (próximo commit).
+ * RF-015: el selector de grupo activo. Al tocar un grupo lo marcamos
+ *   como activo y navegamos a "Mi semana" de ese grupo (RF-054).
+ *
+ * El sub-botón "Configurar patrón" (solo admin) sigue llevando directo
+ * a la pantalla de patrón.
  */
 export default function GruposScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  const setGrupo = useGrupoActivoStore((s) => s.setGrupo);
   const { signOut, loading: signOutLoading } = useSignOut();
 
   const [grupos, setGrupos] = useState<GrupoConRol[]>([]);
@@ -50,6 +54,11 @@ export default function GruposScreen() {
   const onSignOut = async () => {
     await signOut();
     // El _layout del grupo detecta user=null y redirige a login.
+  };
+
+  const onAbrirGrupo = (g: GrupoConRol) => {
+    setGrupo({ id: g.id, nombre: g.nombre, rol: g.rol });
+    router.push(`/(app)/grupos/${g.id}/mi-semana`);
   };
 
   return (
@@ -103,7 +112,7 @@ export default function GruposScreen() {
           }
           renderItem={({ item }) => (
             <Pressable
-              onPress={() => router.push(`/(app)/grupos/${item.id}/asignaciones`)}
+              onPress={() => onAbrirGrupo(item)}
               className="rounded-lg border border-slate-200 bg-white p-4 active:bg-slate-50"
             >
               <View className="flex-row items-center justify-between">
@@ -131,7 +140,7 @@ export default function GruposScreen() {
               ) : null}
               <View className="mt-3 flex-row items-center justify-between">
                 <Text className="text-xs font-medium text-primary-600">
-                  Asignaciones semanales →
+                  Mi semana →
                 </Text>
                 {item.rol === 'admin' ? (
                   <Pressable
