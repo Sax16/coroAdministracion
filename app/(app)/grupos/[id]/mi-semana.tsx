@@ -12,7 +12,7 @@ import {
 
 import { GrupoConRol, listarMisGrupos } from '@/features/grupos/api';
 import { useAlarmaScheduler, useMiSemana } from '@/features/mi-semana/hooks';
-import { MiServicio } from '@/features/mi-semana/types';
+import { MiEvento, MiEventoEnsayo, MiEventoServicio } from '@/features/mi-semana/types';
 import {
   ROLES_EMOJI,
   ROLES_LABELS,
@@ -29,29 +29,22 @@ import {
 import { useAuthStore } from '@/stores/auth';
 
 /**
- * Pantalla "Mi semana" (RF-054, RF-055, RF-063, RF-064).
+ * Pantalla "Mi semana" (RF-054, RF-055, RF-063, RF-064, RF-076).
  *
- * Es la pantalla principal del usuario autenticado. Muestra los servicios
- * en los que está asignado en el rango [lunes_actual, lunes_actual + 14d).
+ * Muestra los servicios + ensayos en los que el usuario actual está
+ * asignado/invitado, en el rango [lunes_actual, lunes_actual + 14d).
  *
- * Funcionalidades:
- * - Header con nombre del grupo + badge de "X alarmas agendadas"
- * - 14 cards (7 días × 2 semanas). Cada servicio es un bloque con
- *   hora, título, lugar y los roles del usuario (chips con emoji).
- * - Pull-to-refresh.
- * - Al montar: pide permiso de notificaciones + agenda una alarma local
- *   por cada servicio programado. La alarma usa el `offset_alarma_min`
- *   configurado en el patrón del grupo (default 60).
- * - Si es admin, muestra un FAB o botón en header "Administrar"
- *   que lleva a la vista de asignaciones para editar.
+ * Diferencia con la vista semanal del admin (`/asignaciones`):
+ * - Solo muestra eventos donde el usuario actual está asignado/invitado.
+ * - No es editable.
+ * - Al renderizar, agenda alarmas locales (servicios Y ensayos).
  *
  * Decisiones:
- * - La pantalla NO auto-refresca cuando el admin edita una asignación.
- *   El usuario hace pull-to-refresh. Para v0.1.0 alcanza; v0.2.0 con
- *   Realtime o TanStack Query se puede hacer más elegante.
- * - El agendamiento de alarmas es best-effort: si el permiso es
- *   'denied' o 'undetermined', seguimos mostrando la lista igual,
- *   solo no agendamos.
+ * - Eventos cancelados no aparecen (filtrados en la query).
+ * - El color del badge "Ensayo" vs "Servicio" diferencia visualmente
+ *   los dos tipos de evento.
+ * - La pantalla NO auto-refresca cuando el admin edita algo. El usuario
+ *   hace pull-to-refresh. v0.2.0 con Realtime se puede mejorar.
  */
 export default function MiSemanaScreen() {
   const router = useRouter();
@@ -84,21 +77,23 @@ export default function MiSemanaScreen() {
     };
   }, [grupoId, user]);
 
-  const { servicios, loading, error, refetch, offsetMinutos } = useMiSemana(grupoId ?? '', lunes);
+  const { eventos, loading, error, refetch, offsetMinutos } = useMiSemana(
+    grupoId ?? '',
+    lunes,
+  );
 
-  // Re-agendar alarmas cuando cambian los servicios o el offset
+  // Re-agendar alarmas cuando cambian los eventos o el offset
   const { cantidadAgendadas, permiso, loading: agendando } = useAlarmaScheduler(
-    servicios,
+    eventos,
     offsetMinutos,
     nombreGrupo ?? 'el grupo',
   );
 
-  // Permiso denegado → mostrar CTA una vez
   useEffect(() => {
     if (permiso === 'denied') {
       Alert.alert(
         'Alarmas desactivadas',
-        'Para que la app te avise antes de cada servicio, activá las notificaciones en los ajustes del sistema.',
+        'Para que la app te avise antes de cada servicio o ensayo, activá las notificaciones en los ajustes del sistema.',
         [
           { text: 'Más tarde', style: 'cancel' },
           { text: 'Ir a Ajustes', onPress: () => router.push('/(app)/grupos') },
@@ -107,17 +102,17 @@ export default function MiSemanaScreen() {
     }
   }, [permiso, router]);
 
-  // Agrupar servicios por día para la vista
-  const serviciosPorDia = useMemo(() => {
-    const map = new Map<string, MiServicio[]>();
-    for (const s of servicios) {
-      const key = new Date(s.fecha_inicio).toDateString();
+  // Agrupar eventos por día
+  const eventosPorDia = useMemo(() => {
+    const map = new Map<string, MiEvento[]>();
+    for (const e of eventos) {
+      const key = new Date(e.fecha_inicio).toDateString();
       const arr = map.get(key) ?? [];
-      arr.push(s);
+      arr.push(e);
       map.set(key, arr);
     }
     return map;
-  }, [servicios]);
+  }, [eventos]);
 
   const dias = useMemo(() => getDiasSemana(lunes), [lunes]);
   const diasSemana2 = useMemo(() => getDiasSemana(agregarDias(lunes, 7)), [lunes]);
@@ -155,7 +150,7 @@ export default function MiSemanaScreen() {
       >
         <View className="flex-row items-center justify-between">
           <Text
-            className={`text-xs ${
+            className={`flex-1 text-xs ${
               permiso === 'granted'
                 ? 'text-emerald-800'
                 : permiso === 'denied'
@@ -172,13 +167,22 @@ export default function MiSemanaScreen() {
                 : 'Pidiendo permiso de notificaciones…'}
           </Text>
           {esAdmin ? (
-            <Pressable
-              onPress={() => router.push(`/(app)/grupos/${grupoId}/asignaciones`)}
-              hitSlop={8}
-              className="rounded-md border border-primary-600 px-2.5 py-1 active:bg-primary-50"
-            >
-              <Text className="text-xs font-semibold text-primary-600">Administrar</Text>
-            </Pressable>
+            <View className="flex-row gap-2">
+              <Pressable
+                onPress={() => router.push(`/(app)/grupos/${grupoId}/ensayos`)}
+                hitSlop={8}
+                className="rounded-md border border-slate-300 px-2.5 py-1 active:bg-slate-50"
+              >
+                <Text className="text-xs font-semibold text-slate-700">Ensayos</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => router.push(`/(app)/grupos/${grupoId}/asignaciones`)}
+                hitSlop={8}
+                className="rounded-md border border-primary-600 px-2.5 py-1 active:bg-primary-50"
+              >
+                <Text className="text-xs font-semibold text-primary-600">Asignar</Text>
+              </Pressable>
+            </View>
           ) : null}
         </View>
       </View>
@@ -194,15 +198,8 @@ export default function MiSemanaScreen() {
           </View>
         ) : null}
 
-        {/* Semana actual */}
-        <SeccionSemana titulo="Esta semana" dias={dias} serviciosPorDia={serviciosPorDia} />
-
-        {/* Semana siguiente */}
-        <SeccionSemana
-          titulo="Semana próxima"
-          dias={diasSemana2}
-          serviciosPorDia={serviciosPorDia}
-        />
+        <SeccionSemana titulo="Esta semana" dias={dias} eventosPorDia={eventosPorDia} />
+        <SeccionSemana titulo="Semana próxima" dias={diasSemana2} eventosPorDia={eventosPorDia} />
       </ScrollView>
     </>
   );
@@ -211,10 +208,10 @@ export default function MiSemanaScreen() {
 interface SeccionSemanaProps {
   titulo: string;
   dias: Date[];
-  serviciosPorDia: Map<string, MiServicio[]>;
+  eventosPorDia: Map<string, MiEvento[]>;
 }
 
-function SeccionSemana({ titulo, dias, serviciosPorDia }: SeccionSemanaProps) {
+function SeccionSemana({ titulo, dias, eventosPorDia }: SeccionSemanaProps) {
   return (
     <View className="mt-2">
       <Text className="mx-4 mb-2 mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -222,7 +219,7 @@ function SeccionSemana({ titulo, dias, serviciosPorDia }: SeccionSemanaProps) {
       </Text>
       {dias.map((dia, idx) => {
         const key = dia.toDateString();
-        const items = serviciosPorDia.get(key) ?? [];
+        const items = eventosPorDia.get(key) ?? [];
         return (
           <View key={key} className="mx-4 mb-2">
             <View className="mb-1.5 flex-row items-baseline">
@@ -235,10 +232,10 @@ function SeccionSemana({ titulo, dias, serviciosPorDia }: SeccionSemanaProps) {
             </View>
             {items.length === 0 ? (
               <View className="rounded-lg border border-dashed border-slate-200 bg-white p-3">
-                <Text className="text-sm text-slate-400">Sin servicios asignados</Text>
+                <Text className="text-sm text-slate-400">Sin servicios ni ensayos</Text>
               </View>
             ) : (
-              items.map((s) => <MiServicioCard key={s.id} servicio={s} />)
+              items.map((ev) => <MiEventoCard key={`${ev.kind}-${ev.id}`} evento={ev} />)
             )}
           </View>
         );
@@ -247,33 +244,66 @@ function SeccionSemana({ titulo, dias, serviciosPorDia }: SeccionSemanaProps) {
   );
 }
 
-function MiServicioCard({ servicio }: { servicio: MiServicio }) {
+function MiEventoCard({ evento }: { evento: MiEvento }) {
+  if (evento.kind === 'servicio') {
+    return <MiServicioCardUI evento={evento} />;
+  }
+  return <MiEnsayoCardUI evento={evento} />;
+}
+
+function MiServicioCardUI({ evento }: { evento: MiEventoServicio }) {
   return (
-    <View className="mb-2 rounded-lg border border-slate-200 bg-white p-3">
-      <View className="flex-row items-baseline">
+    <View className="mb-2 rounded-lg border border-slate-200 border-l-4 border-l-primary-500 bg-white p-3">
+      <View className="flex-row items-center gap-2">
+        <View className="rounded-full bg-primary-100 px-2 py-0.5">
+          <Text className="text-xs font-medium text-primary-700">Servicio</Text>
+        </View>
         <Text className="text-lg font-semibold text-slate-900">
-          {formatearHora(servicio.fecha_inicio)}
+          {formatearHora(evento.fecha_inicio)}
         </Text>
-        {servicio.titulo ? (
-          <Text className="ml-2 text-sm text-slate-600" numberOfLines={1}>
-            {servicio.titulo}
+        {evento.titulo ? (
+          <Text className="flex-1 text-sm text-slate-600" numberOfLines={1}>
+            {evento.titulo}
           </Text>
         ) : null}
       </View>
-      {servicio.lugar ? (
-        <Text className="mt-1 text-xs text-slate-500">📍 {servicio.lugar}</Text>
+      {evento.lugar ? (
+        <Text className="mt-1 text-xs text-slate-500">📍 {evento.lugar}</Text>
       ) : null}
-      <View className="mt-2 flex-row flex-wrap gap-1.5">
-        {servicio.mis_roles.map((r: RolServicio, i: number) => (
-          <View
-            key={`${r}-${i}`}
-            className="flex-row items-center rounded-full bg-primary-100 px-2.5 py-0.5"
-          >
-            <Text className="mr-1 text-xs">{ROLES_EMOJI[r]}</Text>
-            <Text className="text-xs font-medium text-primary-700">{ROLES_LABELS[r]}</Text>
-          </View>
-        ))}
+      {evento.mis_roles.length > 0 ? (
+        <View className="mt-2 flex-row flex-wrap gap-1.5">
+          {evento.mis_roles.map((r: RolServicio, i: number) => (
+            <View
+              key={`${r}-${i}`}
+              className="flex-row items-center rounded-full bg-primary-100 px-2.5 py-0.5"
+            >
+              <Text className="mr-1 text-xs">{ROLES_EMOJI[r]}</Text>
+              <Text className="text-xs font-medium text-primary-700">{ROLES_LABELS[r]}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function MiEnsayoCardUI({ evento }: { evento: MiEventoEnsayo }) {
+  return (
+    <View className="mb-2 rounded-lg border border-slate-200 border-l-4 border-l-amber-500 bg-white p-3">
+      <View className="flex-row items-center gap-2">
+        <View className="rounded-full bg-amber-100 px-2 py-0.5">
+          <Text className="text-xs font-medium text-amber-700">🎵 Ensayo</Text>
+        </View>
+        <Text className="text-lg font-semibold text-slate-900">
+          {formatearHora(evento.fecha_inicio)}
+        </Text>
+        <Text className="flex-1 text-sm text-slate-600" numberOfLines={1}>
+          {evento.titulo}
+        </Text>
       </View>
+      {evento.lugar ? (
+        <Text className="mt-1 text-xs text-slate-500">📍 {evento.lugar}</Text>
+      ) : null}
     </View>
   );
 }

@@ -1,5 +1,14 @@
 /**
  * Hooks de la feature "Mi semana".
+ *
+ * A partir de la integración con ensayos (RF-076), `useMiSemana` carga
+ * TANTO servicios como ensayos en los que el usuario está
+ * asignado/invitado, los mergea en un array `MiEvento` ordenado por
+ * fecha, y los devuelve.
+ *
+ * El `useAlarmaScheduler` se extiende para agendar alarmas también
+ * para los ensayos, con la misma lógica de offset y permisos que
+ * los servicios.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -12,22 +21,24 @@ import {
 import { useAuthStore } from '@/stores/auth';
 
 import { listarMisServiciosEnRango } from './api';
-import { MiServicio } from './types';
+import { listarMisEnsayosEnRango } from '@/features/ensayos/api';
+import { MiEvento, MiEventoEnsayo, MiEventoServicio } from './types';
 
 // =============================================================================
 // useMiSemana
 // =============================================================================
 
 /**
- * Carga los servicios del usuario actual en el grupo, en el rango
- * de 14 días (semana actual + siguiente).
+ * Carga los servicios + ensayos del usuario actual en el grupo, en el
+ * rango de 14 días (semana actual + siguiente), y los mergea ordenados
+ * por `fecha_inicio` ascendente.
  *
  * @param grupoId - id del grupo activo
  * @param lunes - lunes de la semana actual (la pantalla carga 14 días)
  */
 export function useMiSemana(grupoId: string, lunes: Date) {
   const user = useAuthStore((s) => s.user);
-  const [data, setData] = useState<MiServicio[]>([]);
+  const [data, setData] = useState<MiEvento[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   /** Offset de alarma configurado en el patrón del grupo. Default 60. */
@@ -57,8 +68,6 @@ export function useMiSemana(grupoId: string, lunes: Date) {
       return;
     }
     if (!ug) {
-      // El usuario no es miembro activo de este grupo. Raro pero
-      // posible (race condition en signOut, etc).
       setError('No sos miembro activo de este grupo');
       setData([]);
       setLoading(false);
@@ -71,24 +80,64 @@ export function useMiSemana(grupoId: string, lunes: Date) {
     const fin = new Date(inicio);
     fin.setDate(inicio.getDate() + 14);
 
-    // 3. Cargar servicios
-    const result = await listarMisServiciosEnRango({
-      grupoId,
-      usuarioGrupoId: ug.id,
-      lunesISO: inicio.toISOString(),
-      finISO: fin.toISOString(),
-    });
+    // 3. Cargar servicios y ensayos EN PARALELO
+    const [serviciosRes, ensayosRes] = await Promise.all([
+      listarMisServiciosEnRango({
+        grupoId,
+        usuarioGrupoId: ug.id,
+        lunesISO: inicio.toISOString(),
+        finISO: fin.toISOString(),
+      }),
+      listarMisEnsayosEnRango({
+        grupoId,
+        usuarioGrupoId: ug.id,
+        lunesISO: inicio.toISOString(),
+        finISO: fin.toISOString(),
+      }),
+    ]);
 
-    if (!result.ok) {
-      setError(result.error);
+    if (!serviciosRes.ok) {
+      setError(serviciosRes.error);
+      setData([]);
+      setLoading(false);
+      return;
+    }
+    if (!ensayosRes.ok) {
+      setError(ensayosRes.error);
       setData([]);
       setLoading(false);
       return;
     }
 
-    setData(result.data);
+    // 4. Merge a MiEvento (discriminated union)
+    const servicios: MiEventoServicio[] = serviciosRes.data.map((s) => ({
+      kind: 'servicio' as const,
+      id: s.id,
+      fecha_inicio: s.fecha_inicio,
+      titulo: s.titulo,
+      lugar: s.lugar,
+      estado: s.estado,
+      mis_roles: s.mis_roles,
+    }));
 
-    // 4. Cargar offset del patrón del grupo
+    const ensayos: MiEventoEnsayo[] = ensayosRes.data.map((e) => ({
+      kind: 'ensayo' as const,
+      id: e.id,
+      fecha_inicio: e.fecha_inicio,
+      titulo: e.titulo,
+      lugar: e.lugar,
+      estado: e.estado,
+      mis_roles: [],
+    }));
+
+    // 5. Ordenar por fecha_inicio ascendente
+    const merged: MiEvento[] = [...servicios, ...ensayos].sort(
+      (a, b) => new Date(a.fecha_inicio).getTime() - new Date(b.fecha_inicio).getTime(),
+    );
+
+    setData(merged);
+
+    // 6. Cargar offset del patrón del grupo
     const { data: patron } = await supabase
       .from('patrones_recurrentes')
       .select('offset_alarma_min')
@@ -106,7 +155,7 @@ export function useMiSemana(grupoId: string, lunes: Date) {
     void load();
   }, [load]);
 
-  return { servicios: data, loading, error, refetch: load, offsetMinutos };
+  return { eventos: data, loading, error, refetch: load, offsetMinutos };
 }
 
 // =============================================================================
@@ -127,18 +176,17 @@ interface UseAlarmaSchedulerResult {
 }
 
 /**
- * Hook que pide permiso + agenda las alarmas de los servicios del usuario
- * cada vez que cambian los `servicios` o el `offsetMinutos`.
+ * Hook que pide permiso + agenda las alarmas de los eventos del
+ * usuario (servicios + ensayos) cada vez que cambian los `eventos` o
+ * el `offsetMinutos`.
  *
  * Estabilización: el `useEffect` no depende de la identidad del array
- * `servicios` (cambia en cada render), sino de una firma estable basada
+ * `eventos` (cambia en cada render), sino de una firma estable basada
  * en los IDs. Esto evita re-agendar en loop infinito cada vez que el
  * padre hace `setData`.
- *
- * Llamar en `useEffect` de la pantalla "Mi semana".
  */
 export function useAlarmaScheduler(
-  servicios: MiServicio[],
+  eventos: MiEvento[],
   offsetMinutos: number,
   grupoNombre: string,
 ): UseAlarmaSchedulerResult {
@@ -148,11 +196,15 @@ export function useAlarmaScheduler(
   const [cantidadAgendadas, setCantidadAgendadas] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  // Firma estable: string con IDs ordenados. Solo cambia si el conjunto
-  // de servicios cambia (no en cada render).
-  const firmaServicios = useMemo(
-    () => servicios.map((s) => `${s.id}:${s.estado}`).sort().join('|'),
-    [servicios],
+  // Firma estable: string con IDs ordenados + kind. Solo cambia si el
+  // conjunto de eventos cambia (no en cada render).
+  const firmaEventos = useMemo(
+    () =>
+      eventos
+        .map((e) => `${e.kind}:${e.id}:${e.estado}`)
+        .sort()
+        .join('|'),
+    [eventos],
   );
 
   useEffect(() => {
@@ -176,26 +228,28 @@ export function useAlarmaScheduler(
       setPermiso(r.data);
 
       if (r.data !== 'granted') {
-        // Sin permiso, no agendamos nada
         setLoading(false);
         return;
       }
 
-      // 2. Limpiar alarmas anteriores del grupo y agendar las nuevas
-      // (idempotente: si el usuario vuelve a abrir la pantalla o
-      // cambia la semana, se reprograma todo desde cero).
+      // 2. Limpiar alarmas anteriores y agendar las nuevas
       await cancelAllAlarms();
 
       let count = 0;
-      for (const s of servicios) {
-        // Solo agendamos para servicios `programado` (no realizado, no cancelado)
-        if (s.estado !== 'programado') continue;
+      for (const ev of eventos) {
+        // Solo agendamos para eventos `programado` (no realizado, no cancelado)
+        if (ev.estado !== 'programado') continue;
+
+        const titulo =
+          ev.kind === 'ensayo'
+            ? `Ensayo: ${ev.titulo}`
+            : (ev.titulo ?? 'Servicio');
 
         const result = await scheduleAlarm({
-          servicioId: s.id,
-          fechaInicioISO: s.fecha_inicio,
+          servicioId: ev.id, // el identificador único del evento
+          fechaInicioISO: ev.fecha_inicio,
           offsetMinutos,
-          tituloServicio: s.titulo ?? 'Servicio',
+          tituloServicio: titulo,
           grupoNombre,
         });
         if (result.ok && result.data) {
@@ -212,7 +266,7 @@ export function useAlarmaScheduler(
     return () => {
       cancelado = true;
     };
-  }, [firmaServicios, offsetMinutos, grupoNombre]);
+  }, [firmaEventos, offsetMinutos, grupoNombre]);
 
   return { loading, permiso, ultimaVezAgendado, cantidadAgendadas, error };
 }
