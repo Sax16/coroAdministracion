@@ -87,6 +87,13 @@ adhiere a [Semantic Versioning](https://semver.org/lang/es/).
   miembros del grupo. No hay `autor_id` (cualquier admin puede
   editar/eliminar cualquier comunicado, decisión de diseño MVP);
   refinar a "solo el autor" en v0.2.0 si se agrega la columna.
+- **Home del grupo**: dashboard post-selección de grupo activo
+  con resumen de la semana (próximos 3 servicios, próximos 3
+  ensayos, último comunicado) y grid de accesos rápidos a todas
+  las secciones (Mi semana, Ensayos, Comunicados; Asignaciones y
+  Patrón solo para admin). CTA destacado si el admin aún no
+  configuró el patrón. Pasa a ser la pantalla principal post-login
+  cuando hay grupo activo.
 - Componentes UI base: `Button` (variantes primary/secondary/danger) y
   `LabeledInput` con la paleta del proyecto (indigo + slate).
 - Routing con Expo Router: grupos `(auth)` y `(app)` con guards de
