@@ -48,6 +48,25 @@ adhiere a [Semantic Versioning](https://semver.org/lang/es/).
   las APIs de features (antes se duplicaba inline en cada api.ts).
 - Root layout (`app/_layout.tsx`) ahora hidrata `grupoActivo` y
   configura notificaciones al montar la app.
+- **Push notifications**: Edge Function `notificar-push` en Deno que
+  recibe eventos de la app, resuelve destinatarios, lee tokens de
+  `dispositivos` y manda a Expo Push API. Cubre RF-060, RF-061,
+  RF-062, RF-065, RF-066, RF-083, RF-085 (parcial: la limpieza de
+  tokens inválidos RF-086 queda para v0.2.0). Soporta 11 tipos de
+  evento: servicio/ensayo creado/modificado/cancelado, comunicado,
+  solicitud recibida/aprobada/rechazada, asignación nueva.
+- Migración `20260615000000_push_notifications.sql` con tabla
+  `notificaciones` (historial in-app), enum `tipo_notificacion_enum`
+  y RLS por usuario.
+- Feature `src/features/dispositivos/` con `types.ts`, `api.ts`
+  (registrar/eliminar push token), `hooks.ts` y el componente
+  `PushTokenRegistrar` (invisible) que se monta en `(app)/_layout.tsx`
+  y se ocupa de registrar el push token post-auth y limpiarlo en
+  sign-out.
+- Utility `src/lib/pushApi.ts` con `notificarPush(tipo, payload)` que
+  llama a la Edge Function desde la app.
+- `tsconfig.json` excluye `supabase/functions/**/*` (la Edge Function
+  corre en Deno, no en Node; Deno CLI la chequea con su propio config).
 - Componentes UI base: `Button` (variantes primary/secondary/danger) y
   `LabeledInput` con la paleta del proyecto (indigo + slate).
 - Routing con Expo Router: grupos `(auth)` y `(app)` con guards de

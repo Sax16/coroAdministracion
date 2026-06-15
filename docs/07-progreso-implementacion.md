@@ -6,7 +6,7 @@
 > [`CHANGELOG.md`](../CHANGELOG.md) (que es por release), este doc es narrativo
 > y se actualiza conforme avanzamos.
 
-> Última actualización: 2026-06-14 (sesión de "Mi semana").
+> Última actualización: 2026-06-14 (sesión de Push notifications).
 
 ## 1. Dónde estamos
 
@@ -36,6 +36,7 @@ semana", push notifications, ensayos, comunicados, cierre de asistencia.
 | **Patrón recurrente semanal** | ✅ Implementado | Cubre RF-040, RF-041 (vía trigger de DB) y RF-044. UI por día con chips de horarios |
 | **Asignaciones semanales** | ✅ Implementado | Cubre RF-050, RF-051, RF-052, RF-053. Vista semanal con navegación de semana, asignación multi-rol por miembro-servicio |
 | **Pantalla "Mi semana" + scheduler de alarmas** | ✅ Implementado | Cubre RF-054, RF-055, RF-063, RF-064. Vista 14 días con servicios del usuario, agenda alarmas locales con `expo-notifications`, pide `SCHEDULE_EXACT_ALARM` en Android 12+ |
+| **Push notifications (infra)** | ✅ Implementado | Edge Function `notificar-push` + tabla `notificaciones` + feature `dispositivos/` con `PushTokenRegistrar`. Cubre RF-060, RF-061, RF-062, RF-065, RF-066, RF-083, RF-085. RF-086 (limpieza de tokens) queda para v0.2.0 |
 | Routing Expo | ✅ Estructura | Grupos `(auth)` y `(app)` con guards de redirección |
 
 ### Lo que FALTA para MVP (siguiente sprint) 🟡
@@ -214,7 +215,7 @@ cero) y con intentos de "intentar de nuevo" si algo falla a mitad.
    se encarga de la generación)
 10. ✅ Asignaciones semanales: vista semanal + asignación
 11. ✅ "Mi semana" con scheduler de alarmas
-12. Push notifications (Edge Function + `dispositivos` table)
+12. ✅ Push notifications (Edge Function + `dispositivos` table)
 13. Home del grupo (post-selección de grupo activo)
 
 ### Antes de beta
