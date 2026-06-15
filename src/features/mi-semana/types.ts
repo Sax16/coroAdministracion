@@ -49,6 +49,10 @@ export interface MiEventoServicio {
   lugar: string | null;
   estado: MiServicio['estado'];
   mis_roles: RolServicio[];
+  /** Estado de asistencia del usuario actual (RF-091/096). */
+  mi_estado: 'asistio' | 'no_asistio' | 'justificado' | null;
+  /** Texto de justificación si existe (RF-097). */
+  mi_justificacion: string | null;
 }
 
 /** Ensayo del usuario. El usuario está invitado (es 1:1 en `invitados_ensayo`). */

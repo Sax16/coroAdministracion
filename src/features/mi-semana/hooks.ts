@@ -18,6 +18,7 @@ import {
   pedirPermisosAlarma,
   scheduleAlarm,
 } from '@/lib/notifications';
+import { obtenerMisEstadosEnServicios } from '@/features/asistencia/api';
 import { useAuthStore } from '@/stores/auth';
 
 import { listarMisServiciosEnRango } from './api';
@@ -109,16 +110,36 @@ export function useMiSemana(grupoId: string, lunes: Date) {
       return;
     }
 
+    // 3b. Cargar mi estado de asistencia en cada servicio (RF-091/096).
+    // Solo si hay servicios. Esto hidrata el botón "Justificar".
+    let misEstadosMap = new Map<
+      string,
+      { asignacion_id: string; estado: 'asistio' | 'no_asistio' | 'justificado'; justificacion: string | null }
+    >();
+    if (serviciosRes.data.length > 0) {
+      const estadosRes = await obtenerMisEstadosEnServicios({
+        servicioIds: serviciosRes.data.map((s) => s.id),
+      });
+      if (estadosRes.ok) {
+        misEstadosMap = estadosRes.data;
+      }
+    }
+
     // 4. Merge a MiEvento (discriminated union)
-    const servicios: MiEventoServicio[] = serviciosRes.data.map((s) => ({
-      kind: 'servicio' as const,
-      id: s.id,
-      fecha_inicio: s.fecha_inicio,
-      titulo: s.titulo,
-      lugar: s.lugar,
-      estado: s.estado,
-      mis_roles: s.mis_roles,
-    }));
+    const servicios: MiEventoServicio[] = serviciosRes.data.map((s) => {
+      const miEstado = misEstadosMap.get(s.id);
+      return {
+        kind: 'servicio' as const,
+        id: s.id,
+        fecha_inicio: s.fecha_inicio,
+        titulo: s.titulo,
+        lugar: s.lugar,
+        estado: s.estado,
+        mis_roles: s.mis_roles,
+        mi_estado: miEstado?.estado ?? null,
+        mi_justificacion: miEstado?.justificacion ?? null,
+      };
+    });
 
     const ensayos: MiEventoEnsayo[] = ensayosRes.data.map((e) => ({
       kind: 'ensayo' as const,

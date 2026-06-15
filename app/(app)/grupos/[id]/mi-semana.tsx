@@ -198,8 +198,24 @@ export default function MiSemanaScreen() {
           </View>
         ) : null}
 
-        <SeccionSemana titulo="Esta semana" dias={dias} eventosPorDia={eventosPorDia} />
-        <SeccionSemana titulo="Semana próxima" dias={diasSemana2} eventosPorDia={eventosPorDia} />
+        <SeccionSemana
+          titulo="Esta semana"
+          dias={dias}
+          eventosPorDia={eventosPorDia}
+          grupoId={grupoId ?? ''}
+          onJustificar={(servicioId) =>
+            router.push(`/(app)/grupos/${grupoId}/servicios/${servicioId}/justificar`)
+          }
+        />
+        <SeccionSemana
+          titulo="Semana próxima"
+          dias={diasSemana2}
+          eventosPorDia={eventosPorDia}
+          grupoId={grupoId ?? ''}
+          onJustificar={(servicioId) =>
+            router.push(`/(app)/grupos/${grupoId}/servicios/${servicioId}/justificar`)
+          }
+        />
       </ScrollView>
     </>
   );
@@ -209,9 +225,11 @@ interface SeccionSemanaProps {
   titulo: string;
   dias: Date[];
   eventosPorDia: Map<string, MiEvento[]>;
+  grupoId: string;
+  onJustificar: (servicioId: string) => void;
 }
 
-function SeccionSemana({ titulo, dias, eventosPorDia }: SeccionSemanaProps) {
+function SeccionSemana({ titulo, dias, eventosPorDia, grupoId, onJustificar }: SeccionSemanaProps) {
   return (
     <View className="mt-2">
       <Text className="mx-4 mb-2 mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -235,7 +253,14 @@ function SeccionSemana({ titulo, dias, eventosPorDia }: SeccionSemanaProps) {
                 <Text className="text-sm text-slate-400">Sin servicios ni ensayos</Text>
               </View>
             ) : (
-              items.map((ev) => <MiEventoCard key={`${ev.kind}-${ev.id}`} evento={ev} />)
+              items.map((ev) => (
+                <MiEventoCard
+                  key={`${ev.kind}-${ev.id}`}
+                  evento={ev}
+                  grupoId={grupoId}
+                  onJustificar={onJustificar}
+                />
+              ))
             )}
           </View>
         );
@@ -244,14 +269,37 @@ function SeccionSemana({ titulo, dias, eventosPorDia }: SeccionSemanaProps) {
   );
 }
 
-function MiEventoCard({ evento }: { evento: MiEvento }) {
+function MiEventoCard({
+  evento,
+  grupoId: _grupoId,
+  onJustificar,
+}: {
+  evento: MiEvento;
+  grupoId: string;
+  onJustificar: (servicioId: string) => void;
+}) {
   if (evento.kind === 'servicio') {
-    return <MiServicioCardUI evento={evento} />;
+    return <MiServicioCardUI evento={evento} onJustificar={onJustificar} />;
   }
   return <MiEnsayoCardUI evento={evento} />;
 }
 
-function MiServicioCardUI({ evento }: { evento: MiEventoServicio }) {
+function MiServicioCardUI({
+  evento,
+  onJustificar,
+}: {
+  evento: MiEventoServicio;
+  onJustificar: (servicioId: string) => void;
+}) {
+  // El servicio es post-evento si ya pasó (fecha_inicio < ahora) y no está cancelado.
+  const fechaInicioMs = new Date(evento.fecha_inicio).getTime();
+  const esPostEvento = fechaInicioMs < Date.now() && evento.estado === 'programado';
+
+  // CTA Justificar: solo si el servicio ya pasó, el estado es
+  // no_asistio o justificado, y el servicio no está cancelado.
+  const puedeJustificar =
+    esPostEvento && (evento.mi_estado === 'no_asistio' || evento.mi_estado === 'justificado');
+
   return (
     <View className="mb-2 rounded-lg border border-slate-200 border-l-4 border-l-primary-500 bg-white p-3">
       <View className="flex-row items-center gap-2">
@@ -282,6 +330,46 @@ function MiServicioCardUI({ evento }: { evento: MiEventoServicio }) {
             </View>
           ))}
         </View>
+      ) : null}
+
+      {/* Badge de estado de asistencia (si ya pasó) */}
+      {esPostEvento && evento.mi_estado ? (
+        <View className="mt-2.5 flex-row items-center gap-2">
+          {evento.mi_estado === 'asistio' ? (
+            <View className="rounded-full bg-emerald-100 px-2.5 py-0.5">
+              <Text className="text-xs font-medium text-emerald-700">✓ Asististe</Text>
+            </View>
+          ) : evento.mi_estado === 'no_asistio' ? (
+            <View className="rounded-full bg-red-100 px-2.5 py-0.5">
+              <Text className="text-xs font-medium text-red-700">✗ No asististe</Text>
+            </View>
+          ) : (
+            <View className="rounded-full bg-amber-100 px-2.5 py-0.5">
+              <Text className="text-xs font-medium text-amber-700">Justificado</Text>
+            </View>
+          )}
+        </View>
+      ) : null}
+
+      {/* Justificación (RF-097: visible para todos) */}
+      {evento.mi_justificacion ? (
+        <View className="mt-2 rounded-md bg-slate-50 p-2.5">
+          <Text className="text-xs italic text-slate-700">
+            "{evento.mi_justificacion}"
+          </Text>
+        </View>
+      ) : null}
+
+      {/* CTA Justificar (RF-096) */}
+      {puedeJustificar ? (
+        <Pressable
+          onPress={() => onJustificar(evento.id)}
+          className="mt-3 items-center rounded-md border border-amber-500 bg-amber-50 px-3 py-2 active:bg-amber-100"
+        >
+          <Text className="text-sm font-semibold text-amber-700">
+            {evento.mi_justificacion ? '✏️ Editar justificación' : '📝 Justificar inasistencia'}
+          </Text>
+        </Pressable>
       ) : null}
     </View>
   );

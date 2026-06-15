@@ -209,6 +209,9 @@ export default function AsignacionesScreen() {
                         onAsignar={() =>
                           router.push(`/(app)/grupos/${grupoIdParam}/asignaciones/${s.id}`)
                         }
+                        onCerrar={() =>
+                          router.push(`/(app)/grupos/${grupoIdParam}/servicios/${s.id}/cierre`)
+                        }
                       />
                     ))}
                     {cancelados.map((s) => (
@@ -219,6 +222,9 @@ export default function AsignacionesScreen() {
                         cancelado
                         onAsignar={() =>
                           router.push(`/(app)/grupos/${grupoIdParam}/asignaciones/${s.id}`)
+                        }
+                        onCerrar={() =>
+                          router.push(`/(app)/grupos/${grupoIdParam}/servicios/${s.id}/cierre`)
                         }
                       />
                     ))}
@@ -238,9 +244,10 @@ interface ServicioCardProps {
   esAdmin: boolean;
   cancelado?: boolean;
   onAsignar: () => void;
+  onCerrar: () => void;
 }
 
-function ServicioCard({ servicio, esAdmin, cancelado, onAsignar }: ServicioCardProps) {
+function ServicioCard({ servicio, esAdmin, cancelado, onAsignar, onCerrar }: ServicioCardProps) {
   // Agrupar asignaciones por miembro para mostrar "Juan — Cantante, Limpieza"
   const porMiembro = new Map<
     string,
@@ -287,14 +294,24 @@ function ServicioCard({ servicio, esAdmin, cancelado, onAsignar }: ServicioCardP
           ) : null}
         </View>
         {esAdmin && !cancelado ? (
-          <Pressable
-            onPress={onAsignar}
-            className="rounded-md border border-primary-600 px-3 py-1.5 active:bg-primary-50"
-          >
-            <Text className="text-sm font-semibold text-primary-600">
-              {servicio.asignaciones.length > 0 ? 'Editar' : 'Asignar'}
-            </Text>
-          </Pressable>
+          <View className="flex-row gap-2">
+            {esCerrable(servicio) ? (
+              <Pressable
+                onPress={onCerrar}
+                className="rounded-md border border-emerald-600 px-3 py-1.5 active:bg-emerald-50"
+              >
+                <Text className="text-sm font-semibold text-emerald-700">Cerrar</Text>
+              </Pressable>
+            ) : null}
+            <Pressable
+              onPress={onAsignar}
+              className="rounded-md border border-primary-600 px-3 py-1.5 active:bg-primary-50"
+            >
+              <Text className="text-sm font-semibold text-primary-600">
+                {servicio.asignaciones.length > 0 ? 'Editar' : 'Asignar'}
+              </Text>
+            </Pressable>
+          </View>
         ) : null}
       </View>
 
@@ -328,4 +345,18 @@ function ServicioCard({ servicio, esAdmin, cancelado, onAsignar }: ServicioCardP
       )}
     </View>
   );
+}
+
+/**
+ * Un servicio es "cerrable" si ya pasó o está en curso (fecha_inicio <= ahora)
+ * y tiene al menos una asignación. El botón "Cerrar" solo aparece para
+ * admin en estos casos; el responsable del servicio también podría
+ * cerrarlo (la RLS lo valida), pero la UI solo expone el CTA al admin
+ * desde la vista semanal.
+ */
+function esCerrable(servicio: ServicioConAsignaciones): boolean {
+  if (servicio.estado !== 'programado') return false;
+  if (servicio.asignaciones.length === 0) return false;
+  const fechaInicio = new Date(servicio.fecha_inicio).getTime();
+  return fechaInicio <= Date.now();
 }
