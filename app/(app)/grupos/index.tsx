@@ -1,4 +1,4 @@
-import { Link, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 
@@ -102,38 +102,50 @@ export default function GruposScreen() {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
           renderItem={({ item }) => (
-            <Link href={`/(app)/grupos/${item.id}/patron`} asChild>
-              <Pressable className="rounded-lg border border-slate-200 bg-white p-4 active:bg-slate-50">
-                <View className="flex-row items-center justify-between">
-                  <Text className="text-base font-semibold text-slate-900">
-                    {item.nombre}
-                  </Text>
-                  <View
-                    className={`rounded-full px-2 py-0.5 ${
-                      item.rol === 'admin' ? 'bg-primary-100' : 'bg-slate-100'
+            <Pressable
+              onPress={() => router.push(`/(app)/grupos/${item.id}/asignaciones`)}
+              className="rounded-lg border border-slate-200 bg-white p-4 active:bg-slate-50"
+            >
+              <View className="flex-row items-center justify-between">
+                <Text className="text-base font-semibold text-slate-900">
+                  {item.nombre}
+                </Text>
+                <View
+                  className={`rounded-full px-2 py-0.5 ${
+                    item.rol === 'admin' ? 'bg-primary-100' : 'bg-slate-100'
+                  }`}
+                >
+                  <Text
+                    className={`text-xs font-medium ${
+                      item.rol === 'admin' ? 'text-primary-700' : 'text-slate-600'
                     }`}
                   >
-                    <Text
-                      className={`text-xs font-medium ${
-                        item.rol === 'admin' ? 'text-primary-700' : 'text-slate-600'
-                      }`}
-                    >
-                      {item.rol === 'admin' ? 'Admin' : 'Miembro'}
-                    </Text>
-                  </View>
+                    {item.rol === 'admin' ? 'Admin' : 'Miembro'}
+                  </Text>
                 </View>
-                {item.descripcion ? (
-                  <Text className="mt-1 text-sm text-slate-500">
-                    {item.descripcion}
-                  </Text>
-                ) : null}
+              </View>
+              {item.descripcion ? (
+                <Text className="mt-1 text-sm text-slate-500">
+                  {item.descripcion}
+                </Text>
+              ) : null}
+              <View className="mt-3 flex-row items-center justify-between">
+                <Text className="text-xs font-medium text-primary-600">
+                  Asignaciones semanales →
+                </Text>
                 {item.rol === 'admin' ? (
-                  <Text className="mt-2 text-xs font-medium text-primary-600">
-                    Configurar patrón de servicios →
-                  </Text>
+                  <Pressable
+                    onPress={() => router.push(`/(app)/grupos/${item.id}/patron`)}
+                    hitSlop={8}
+                    className="rounded-md px-2 py-1 active:bg-slate-100"
+                  >
+                    <Text className="text-xs font-medium text-slate-500">
+                      Configurar patrón
+                    </Text>
+                  </Pressable>
                 ) : null}
-              </Pressable>
-            </Link>
+              </View>
+            </Pressable>
           )}
         />
       )}
