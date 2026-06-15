@@ -67,6 +67,12 @@ adhiere a [Semantic Versioning](https://semver.org/lang/es/).
   llama a la Edge Function desde la app.
 - `tsconfig.json` excluye `supabase/functions/**/*` (la Edge Function
   corre en Deno, no en Node; Deno CLI la chequea con su propio config).
+- **Ensayos**: feature completa con listado, crear, editar, cancelar,
+  detalle, asignación de encargado, gestión de invitados. Cubre
+  RF-070, RF-071, RF-072, RF-073, RF-074. El cierre de asistencia
+  (RF-075) queda para v0.2.0. Llamadas a `notificarPush()` ya
+  integradas para ensayo_creado, ensayo_modificado, ensayo_cancelado
+  y asignacion_nueva (cuando se invita a un miembro).
 - Componentes UI base: `Button` (variantes primary/secondary/danger) y
   `LabeledInput` con la paleta del proyecto (indigo + slate).
 - Routing con Expo Router: grupos `(auth)` y `(app)` con guards de
