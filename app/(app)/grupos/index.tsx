@@ -142,24 +142,33 @@ export default function GruposScreen() {
                 <Text className="text-xs font-medium text-primary-600">
                   Mi semana →
                 </Text>
-                {item.rol === 'admin' ? (
-                  <View className="flex-row gap-2">
-                    <Pressable
-                      onPress={() => router.push(`/(app)/grupos/${item.id}/ensayos`)}
-                      hitSlop={8}
-                      className="rounded-md px-2 py-1 active:bg-slate-100"
-                    >
-                      <Text className="text-xs font-medium text-slate-500">Ensayos</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => router.push(`/(app)/grupos/${item.id}/patron`)}
-                      hitSlop={8}
-                      className="rounded-md px-2 py-1 active:bg-slate-100"
-                    >
-                      <Text className="text-xs font-medium text-slate-500">Patrón</Text>
-                    </Pressable>
-                  </View>
-                ) : null}
+                <View className="flex-row gap-2">
+                  <Pressable
+                    onPress={() => router.push(`/(app)/grupos/${item.id}/comunicados`)}
+                    hitSlop={8}
+                    className="rounded-md px-2 py-1 active:bg-slate-100"
+                  >
+                    <Text className="text-xs font-medium text-slate-500">Comunicados</Text>
+                  </Pressable>
+                  {item.rol === 'admin' ? (
+                    <>
+                      <Pressable
+                        onPress={() => router.push(`/(app)/grupos/${item.id}/ensayos`)}
+                        hitSlop={8}
+                        className="rounded-md px-2 py-1 active:bg-slate-100"
+                      >
+                        <Text className="text-xs font-medium text-slate-500">Ensayos</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => router.push(`/(app)/grupos/${item.id}/patron`)}
+                        hitSlop={8}
+                        className="rounded-md px-2 py-1 active:bg-slate-100"
+                      >
+                        <Text className="text-xs font-medium text-slate-500">Patrón</Text>
+                      </Pressable>
+                    </>
+                  ) : null}
+                </View>
               </View>
             </Pressable>
           )}
