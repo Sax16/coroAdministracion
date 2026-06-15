@@ -6,7 +6,7 @@
 > [`CHANGELOG.md`](../CHANGELOG.md) (que es por release), este doc es narrativo
 > y se actualiza conforme avanzamos.
 
-> Última actualización: 2026-06-14 (sesión de Home del grupo).
+> Última actualización: 2026-06-15 (sesión de Solicitar ingreso).
 
 ## 1. Dónde estamos
 
@@ -41,6 +41,7 @@ semana", push notifications, ensayos, comunicados, cierre de asistencia.
 | **Cierre de asistencia de servicio** | ✅ Implementado | Cubre RF-090, RF-091, RF-092, RF-093, RF-094, RF-095, RF-096, RF-097. Pantalla de cierre para responsable/admin, pantalla de justificación para miembro, badges de estado en mi-semana, CTA cerrar en vista admin |
 | **Comunicados** | ✅ Implementado | Cubre RF-080, RF-081, RF-082, RF-083, RF-084. Listado cronológico, crear, editar, eliminar, detalle. Push al publicar (comunicado_publicado) |
 | **Home del grupo** | ✅ Implementado | Dashboard post-selección de grupo activo con resumen de la semana y grid de accesos rápidos. Pantalla principal post-login |
+| **Solicitar ingreso a grupo (RF-020 a RF-023)** | ✅ Implementado | Búsqueda por nombre, enviar solicitud, inbox admin, aprobar/rechazar. Push en 4 eventos. Migración nueva abre SELECT de grupos para descubrimiento |
 | Routing Expo | ✅ Estructura | Grupos `(auth)` y `(app)` con guards de redirección |
 
 ### Lo que FALTA para MVP (siguiente sprint) 🟡
@@ -228,8 +229,9 @@ cero) y con intentos de "intentar de nuevo" si algo falla a mitad.
 15. ✅ Cierre de asistencia de servicio (RF-090 → RF-097)
 16. ✅ Comunicados (RF-080 → RF-084)
 17. ✅ Home del grupo (post-selección de grupo activo)
-18. Smoke test en TestFlight + Play Internal con 3-5 grupos reales
-19. Validación de RLS con tests de seguridad
+18. ✅ Solicitar ingreso a grupo (RF-020 → RF-023)
+19. Smoke test en TestFlight + Play Internal con 3-5 grupos reales
+20. Validación de RLS con tests de seguridad
 
 ## 5. Riesgos abiertos
 

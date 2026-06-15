@@ -94,6 +94,14 @@ adhiere a [Semantic Versioning](https://semver.org/lang/es/).
   Patrón solo para admin). CTA destacado si el admin aún no
   configuró el patrón. Pasa a ser la pantalla principal post-login
   cuando hay grupo activo.
+- **Solicitar ingreso a grupo existente (RF-020 a RF-023)**: el
+  usuario puede buscar grupos por nombre, enviar una solicitud con
+  mensaje opcional, y el admin del grupo destino la aprueba o
+  rechaza desde un inbox. Push en los 4 eventos relevantes
+  (solicitud_recibida, solicitud_aprobada, solicitud_rechazada).
+  Migración nueva `20260616000000_solicitar_unirse.sql` que
+  amplía la policy de SELECT en `grupos` para que cualquier
+  autenticado pueda descubrir grupos activos.
 - Componentes UI base: `Button` (variantes primary/secondary/danger) y
   `LabeledInput` con la paleta del proyecto (indigo + slate).
 - Routing con Expo Router: grupos `(auth)` y `(app)` con guards de
