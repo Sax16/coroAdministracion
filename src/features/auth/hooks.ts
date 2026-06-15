@@ -8,8 +8,15 @@
 import { useCallback, useState } from 'react';
 
 import { useAuthStore } from '@/stores/auth';
+import { useGrupoActivoStore } from '@/stores/grupoActivo';
 
-import { signIn as apiSignIn, signUp as apiSignUp, SignInInput, SignUpInput } from './api';
+import {
+  eliminarCuenta as apiEliminarCuenta,
+  signIn as apiSignIn,
+  signUp as apiSignUp,
+  SignInInput,
+  SignUpInput,
+} from './api';
 
 /**
  * Hook principal: expone el usuario actual y el flag hydrated.
@@ -81,4 +88,47 @@ export function useSignOut() {
   }, [signOut]);
 
   return { signOut: doSignOut, loading };
+}
+
+/**
+ * Hook para eliminar la cuenta del usuario actual (RF-006).
+ *
+ * Flujo:
+ * 1. Llama a la RPC `eliminar_cuenta()` (SECURITY DEFINER).
+ * 2. Si la DB lanza la excepción "Debes transferir o eliminar el grupo
+ *    'X'…", la mapeamos a un error legible para mostrar en UI. Igual
+ *    si falla por otra razón.
+ * 3. Tras éxito, limpiamos los stores locales: el grupo activo
+ *    (`clearGrupo`) y la sesión (`signOut`). El orden es:
+ *    grupo → sesión. Si lo hiciéramos al revés, el `_layout` de
+ *    `(app)` detectaría `user=null` y navegaría a login ANTES de
+ *    que limpiemos el grupo activo, dejando el store con un grupo
+ *    que la próxima sesión podría leer.
+ */
+export function useEliminarCuenta() {
+  const signOut = useAuthStore((s) => s.signOut);
+  const clearGrupo = useGrupoActivoStore((s) => s.clear);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const eliminar = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    const result = await apiEliminarCuenta();
+    if (!result.ok) {
+      setLoading(false);
+      setError(result.error);
+      return false;
+    }
+    // Cuenta borrada en el servidor. Limpiamos el estado local
+    // inmediatamente. signOut() dispara onAuthStateChange que también
+    // va a poner user=null, pero lo hacemos explícito para que la UI
+    // reaccione ya (sin esperar el round-trip de Supabase).
+    await clearGrupo();
+    await signOut();
+    setLoading(false);
+    return true;
+  }, [signOut, clearGrupo]);
+
+  return { eliminar, loading, error, clearError: () => setError(null) };
 }

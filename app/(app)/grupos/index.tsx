@@ -2,7 +2,6 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 
-import { useSignOut } from '@/features/auth/hooks';
 import { GrupoConRol, listarMisGrupos } from '@/features/grupos/api';
 import { useAuthStore } from '@/stores/auth';
 import { useGrupoActivoStore } from '@/stores/grupoActivo';
@@ -16,12 +15,16 @@ import { useGrupoActivoStore } from '@/stores/grupoActivo';
  *
  * El sub-botón "Configurar patrón" (solo admin) sigue llevando directo
  * a la pantalla de patrón.
+ *
+ * **Acciones a nivel cuenta** (cerrar sesión, eliminar cuenta) viven
+ * en la pantalla de Perfil (`/(app)/perfil`), accesible desde el botón
+ * "Mi perfil" del header. Esto saca del listado de grupos todo lo que
+ * no es sobre grupos.
  */
 export default function GruposScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const setGrupo = useGrupoActivoStore((s) => s.setGrupo);
-  const { signOut, loading: signOutLoading } = useSignOut();
 
   const [grupos, setGrupos] = useState<GrupoConRol[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,11 +54,6 @@ export default function GruposScreen() {
     void load();
   }, [load]);
 
-  const onSignOut = async () => {
-    await signOut();
-    // El _layout del grupo detecta user=null y redirige a login.
-  };
-
   const onAbrirGrupo = (g: GrupoConRol) => {
     setGrupo({ id: g.id, nombre: g.nombre, rol: g.rol });
     router.push(`/(app)/grupos/${g.id}`);
@@ -69,13 +67,10 @@ export default function GruposScreen() {
           <Text className="text-xs text-slate-500">{user?.email}</Text>
         </View>
         <Pressable
-          onPress={onSignOut}
-          disabled={signOutLoading}
+          onPress={() => router.push('/(app)/perfil')}
           className="rounded-md border border-slate-300 px-3 py-1.5 active:bg-slate-50"
         >
-          <Text className="text-sm text-slate-700">
-            {signOutLoading ? 'Saliendo…' : 'Salir'}
-          </Text>
+          <Text className="text-sm text-slate-700">Mi perfil</Text>
         </Pressable>
       </View>
 

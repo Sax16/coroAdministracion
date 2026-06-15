@@ -1,11 +1,18 @@
 /**
  * Hooks de React para grupos.
  */
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { GrupoActivo, useGrupoActivoStore } from '@/stores/grupoActivo';
 
-import { crearGrupo as apiCrearGrupo, listarMisGrupos, GrupoConRol } from './api';
+import {
+  crearGrupo as apiCrearGrupo,
+  eliminarGrupo as apiEliminarGrupo,
+  listarGruposAdminActivos as apiListarGruposAdminActivos,
+  listarMisGrupos,
+  transferirAdmin as apiTransferirAdmin,
+  GrupoConRol,
+} from './api';
 
 export interface CrearGrupoInput {
   nombre: string;
@@ -75,4 +82,86 @@ export function useGrupoActivo() {
   );
 
   return { grupo, seleccionar };
+}
+
+// =============================================================================
+// Acciones admin sobre el grupo: transferir (RF-013) y eliminar (RF-012)
+// =============================================================================
+//
+// Estas dos acciones se usan desde dos pantallas:
+//   - Home del grupo (admin ve el panel de acciones)
+//   - Flujo "Eliminar mi cuenta" (RF-006), pre-flight
+
+/**
+ * Hook que agrupa las acciones admin sobre un grupo: transferir admin
+ * y eliminar grupo. Maneja loading + error.
+ */
+export function useAccionesGrupo() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const transferir = useCallback(
+    async (input: { grupoId: string; nuevoAdminUsuarioGrupoId: string }) => {
+      setLoading(true);
+      setError(null);
+      const r = await apiTransferirAdmin(input);
+      setLoading(false);
+      if (!r.ok) {
+        setError(r.error);
+        return false;
+      }
+      return true;
+    },
+    [],
+  );
+
+  const eliminar = useCallback(async (grupoId: string) => {
+    setLoading(true);
+    setError(null);
+    const r = await apiEliminarGrupo(grupoId);
+    setLoading(false);
+    if (!r.ok) {
+      setError(r.error);
+      return false;
+    }
+    return true;
+  }, []);
+
+  return {
+    transferir,
+    eliminar,
+    loading,
+    error,
+    clearError: () => setError(null),
+  };
+}
+
+/**
+ * Lista los grupos donde el usuario actual es admin y el grupo está
+ * activo. Usado por el flujo "Eliminar mi cuenta" (RF-006) para detectar
+ * el bloqueo "no podés ser admin" antes de que la DB lo rechace.
+ */
+export function useGruposAdminActivos() {
+  const [grupos, setGrupos] = useState<GrupoConRol[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    const r = await apiListarGruposAdminActivos();
+    if (!r.ok) {
+      setError(r.error);
+      setGrupos([]);
+    } else {
+      setGrupos(r.data);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  return { grupos, loading, error, refetch: load };
 }

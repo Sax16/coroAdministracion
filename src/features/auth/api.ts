@@ -94,3 +94,31 @@ export async function resetPassword(email: string) {
   }
   return { ok: true as const, data: null };
 }
+
+/**
+ * Elimina la cuenta del usuario actual.
+ *
+ * Implementación: invoca la SECURITY DEFINER function `eliminar_cuenta()`
+ * que ejecuta la lógica transaccional:
+ *   1. Verifica que el usuario no sea admin de ningún grupo activo.
+ *      Si lo es, lanza `raise exception` con el nombre del grupo.
+ *   2. Marca todas las membresías (`usuarios_grupos.estado`) como `inactivo`.
+ *   3. DELETE en `public.perfiles` — el FK `perfiles.id references
+ *      auth.users(id) on delete cascade` borra el usuario de auth.
+ *
+ * Decisión de UX: la regla "no podés ser admin" se valida PRIMERO en la
+ * UI (RF-006) y solo después se llama a esta función. Pero la validación
+ * en la DB es la garantía dura: aunque la UI tenga un bug, la DB rechaza
+ * el borrado con un mensaje claro.
+ *
+ * **Importante:** esta función NO cierra la sesión local. Eso es
+ * responsabilidad del caller (`useEliminarCuenta`), que además limpia
+ * los stores para que la app no quede en estado zombie.
+ */
+export async function eliminarCuenta(): Promise<AuthResult<null>> {
+  const { error } = await supabase.rpc('eliminar_cuenta');
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+  return { ok: true, data: null };
+}

@@ -113,6 +113,19 @@ adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 - `app.json` con permisos Android de notificaciones
   (`POST_NOTIFICATIONS`, `SCHEDULE_EXACT_ALARM`, `USE_EXACT_ALARM`,
   `RECEIVE_BOOT_COMPLETED`, `VIBRATE`) y plugin de `expo-notifications`.
+- **Eliminación de cuenta (RF-006)** con doble barrera de confirmación:
+  pre-check en UI (lista los grupos donde el usuario es admin con CTAs
+  inline "Transferir admin" / "Eliminar grupo") + tipeo literal de
+  "ELIMINAR" + Alert.alert final destructivo. Pantallas `/(app)/perfil`
+  y `/(app)/perfil/eliminar` más extracción de "Mi perfil" como hub
+  de acciones de cuenta.
+- **Transferir admin (RF-013)** y **Eliminar grupo (RF-012)** con UI
+  completa, doble confirmación y limpieza del store de grupo activo si
+  se elimina el grupo activo. Pantallas
+  `/(app)/grupos/[id]/transferir-admin` y
+  `/(app)/grupos/[id]/eliminar`. Accesos admin agregados al home del
+  grupo. La pantalla de transferir-admin detecta el origen
+  (`?origen=eliminar-cuenta`) para volver al flujo correcto.
 
 ### Changed
 - `.env.example` actualizado a la nomenclatura actual de keys de Supabase

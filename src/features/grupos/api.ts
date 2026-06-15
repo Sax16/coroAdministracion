@@ -95,3 +95,82 @@ export async function crearGrupo(input: {
     return { ok: false, error: mapErr(e) };
   }
 }
+
+// =============================================================================
+// Transferir admin (RF-013) y Eliminar grupo (RF-012)
+// =============================================================================
+//
+// Estas dos operaciones están acá, en grupos, porque son acciones sobre
+// el grupo. Se usan desde dos lugares:
+//   1. Admin del grupo, desde el home del grupo (RF-012, RF-013).
+//   2. Pre-flight del flujo "Eliminar mi cuenta" (RF-006): si el usuario
+//      es admin de grupos activos, tiene que resolverlos primero.
+
+/**
+ * Transfiere el rol admin a otro miembro activo del grupo (RF-013).
+ *
+ * Llama a la SECURITY DEFINER function `transferir_admin(grupo_id,
+ * nuevo_admin_usuario_grupo_id)` que hace las 3 updates en una
+ * transacción: viejo admin → miembro, nuevo → admin, `grupos.admin_id`
+ * → nuevo.
+ *
+ * El parámetro `nuevoAdminUsuarioGrupoId` es el id de la fila en
+ * `usuarios_grupos` del nuevo admin (no el `usuario_id` de auth).
+ */
+export async function transferirAdmin(input: {
+  grupoId: string;
+  nuevoAdminUsuarioGrupoId: string;
+}): Promise<Result<null>> {
+  try {
+    const { error } = await supabase.rpc('transferir_admin', {
+      p_grupo_id: input.grupoId,
+      p_nuevo_admin_usuario_grupo_id: input.nuevoAdminUsuarioGrupoId,
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, data: null };
+  } catch (e) {
+    return { ok: false, error: mapErr(e) };
+  }
+}
+
+/**
+ * Elimina (soft delete) un grupo (RF-012).
+ *
+ * Llama a la SECURITY DEFINER function `eliminar_grupo(grupo_id)` que
+ * hace `grupos.deleted_at = now()` + `usuarios_grupos.estado = 'inactivo'`
+ * para todos los miembros en una transacción.
+ *
+ * Después de esto, el grupo ya no aparece en ningún listado (la RLS +
+ * la helper `usuario_grupos_activos()` filtran por `estado='activo'`).
+ * Los datos históricos (servicios, asignaciones, etc.) se conservan.
+ */
+export async function eliminarGrupo(grupoId: string): Promise<Result<null>> {
+  try {
+    const { error } = await supabase.rpc('eliminar_grupo', {
+      p_grupo_id: grupoId,
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, data: null };
+  } catch (e) {
+    return { ok: false, error: mapErr(e) };
+  }
+}
+
+// =============================================================================
+// Listado de grupos donde el usuario es admin (RF-006 pre-flight)
+// =============================================================================
+
+/**
+ * Devuelve los grupos donde el usuario actual es admin y el grupo está
+ * activo (no soft-deleted). Lo usa el flujo "Eliminar mi cuenta" para
+ * mostrarle al usuario qué grupos tiene que resolver antes de poder
+ * borrar la cuenta.
+ *
+ * Reutiliza `listarMisGrupos` y filtra en JS: más simple y eficiente
+ * que una query aparte, y la cantidad de grupos por usuario es chica.
+ */
+export async function listarGruposAdminActivos(): Promise<Result<GrupoConRol[]>> {
+  const r = await listarMisGrupos();
+  if (!r.ok) return r;
+  return { ok: true, data: r.data.filter((g) => g.rol === 'admin') };
+}

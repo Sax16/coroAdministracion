@@ -233,6 +233,24 @@ export default function GrupoHomeScreen() {
                 onPress={() => router.push(`/(app)/grupos/${grupoId}/patron`)}
               />
             ) : null}
+            {esAdmin ? (
+              <AccesoCard
+                titulo="Transferir admin"
+                subtitulo="Pasar la administración a otro miembro"
+                emoji="🔁"
+                color="slate"
+                onPress={() => router.push(`/(app)/grupos/${grupoId}/transferir-admin`)}
+              />
+            ) : null}
+            {esAdmin ? (
+              <AccesoCard
+                titulo="Eliminar grupo"
+                subtitulo="Acción destructiva con confirmación"
+                emoji="🗑️"
+                color="rose"
+                onPress={() => router.push(`/(app)/grupos/${grupoId}/eliminar`)}
+              />
+            ) : null}
           </View>
         </View>
 

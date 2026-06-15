@@ -6,7 +6,7 @@
 > [`CHANGELOG.md`](../CHANGELOG.md) (que es por release), este doc es narrativo
 > y se actualiza conforme avanzamos.
 
-> Última actualización: 2026-06-15 (sesión de Solicitar ingreso).
+> Última actualización: 2026-06-15 (sesión de Eliminar cuenta).
 
 ## 1. Dónde estamos
 
@@ -42,6 +42,8 @@ semana", push notifications, ensayos, comunicados, cierre de asistencia.
 | **Comunicados** | ✅ Implementado | Cubre RF-080, RF-081, RF-082, RF-083, RF-084. Listado cronológico, crear, editar, eliminar, detalle. Push al publicar (comunicado_publicado) |
 | **Home del grupo** | ✅ Implementado | Dashboard post-selección de grupo activo con resumen de la semana y grid de accesos rápidos. Pantalla principal post-login |
 | **Solicitar ingreso a grupo (RF-020 a RF-023)** | ✅ Implementado | Búsqueda por nombre, enviar solicitud, inbox admin, aprobar/rechazar. Push en 4 eventos. Migración nueva abre SELECT de grupos para descubrimiento |
+| **Eliminar cuenta (RF-006)** | ✅ Implementado | Doble barrera: pre-check en UI de grupos donde es admin (con CTAs transferir/eliminar) + tipeo literal de "ELIMINAR" + Alert.alert destructivo final. Pantallas `/(app)/perfil` y `/(app)/perfil/eliminar`. Limpia stores (grupo activo y sesión) tras éxito |
+| **Transferir admin (RF-013) y Eliminar grupo (RF-012)** | ✅ Implementado | Pantallas `/(app)/grupos/[id]/transferir-admin` y `/(app)/grupos/[id]/eliminar` con doble confirmación. Accesos admin en home del grupo. La pantalla de transferir-admin detecta `?origen=eliminar-cuenta` para volver al flujo correcto |
 | Routing Expo | ✅ Estructura | Grupos `(auth)` y `(app)` con guards de redirección |
 
 ### Lo que FALTA para MVP (siguiente sprint) 🟡
@@ -55,7 +57,7 @@ semana", push notifications, ensayos, comunicados, cierre de asistencia.
 | 🟧 SHOULD | Ensayos | RF-070 → RF-076 | (paralelizable) |
 | 🟧 SHOULD | Comunicados | RF-080 → RF-084 | (paralelizable) |
 | 🟧 SHOULD | Cierre de asistencia + justificaciones | RF-090 → RF-097 | Asignaciones |
-| 🟧 SHOULD | Eliminar cuenta con validaciones | RF-006 | Auth + grupos |
+| ✅ DONE | Eliminar cuenta con validaciones | RF-006 | Auth + grupos |
 | 🟧 SHOULD | Solicitar unirse a grupo existente | RF-020 → RF-023 | Auth |
 
 ## 2. Decisiones técnicas tomadas durante implementación
@@ -114,6 +116,46 @@ sesión) se agregó a `.gitignore` en este commit.
 
 **Razón:** no es parte del código del proyecto; son archivos generados
 por el agente que corre en la máquina del dev.
+
+### D-06 · Doble barrera en acciones destructivas (RNF-014)
+
+**Decisión:** las 3 acciones destructivas del MVP (eliminar cuenta,
+eliminar grupo, transferir admin) siguen el mismo patrón de doble
+barrera:
+
+1. **Pre-check de dependencias en UI** cuando aplica (RF-006: si el
+   usuario es admin de grupos activos, los lista con CTAs inline para
+   resolverlos antes de habilitar el botón).
+2. **Tipeo literal** de la palabra `ELIMINAR` (o el verbo equivalente)
+   en un input, case-insensitive, antes de habilitar el botón.
+3. **`Alert.alert` final** con botón destructivo (`style: 'destructive'`)
+   en iOS para la última confirmación.
+
+**Razón:** RNF-014 pide "doble confirmación con resumen" para
+destructivas. La triple barrera de arriba es lo más cercano que se
+puede hacer en mobile sin friccionar al usuario. El tipeo literal es
+el patrón estándar (lo usa Google, GitHub en borrar repos, etc.) y
+es razonablemente seguro: requiere intención activa.
+
+**Aplicable a:** `app/(app)/perfil/eliminar.tsx`,
+`app/(app)/grupos/[id]/eliminar.tsx`. Transferir admin usa solo
+Alert.alert porque es destructivo pero reversible (se puede
+re-transferir).
+
+### D-07 · Limpiar stores locales tras eliminar cuenta
+
+**Decisión:** `useEliminarCuenta` limpia `useGrupoActivoStore.clear()`
+**antes** de `useAuthStore.signOut()`.
+
+**Razón:** el `_layout` de `(app)` reacciona a `user=null` y reemplaza
+la ruta a `/login`. Si limpiáramos el grupo activo después del signOut,
+el `_layout` ya habría navegado a login y la promesa del `setGrupo(null)`
+quedaría flotando — el store persistido en AsyncStorage quedaría
+apuntando al grupo "viejo", que un próximo login podría re-hidratar.
+
+**Garantía:** `clear()` borra tanto el store en memoria como la
+persistencia en AsyncStorage, así que el próximo login (con una cuenta
+nueva) parte con `grupo=null`.
 
 ## 3. Fixes aplicados durante implementación
 
