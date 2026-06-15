@@ -33,10 +33,32 @@ adhiere a [Semantic Versioning](https://semver.org/lang/es/).
   múltiples roles simultáneos (RF-052) y edición granular (RF-053).
   Cubre RF-050, RF-051, RF-052, RF-053. Tipos, API y hooks de la
   feature.
+- Pantalla "Mi semana": vista del rango actual+próxima (14 días) con
+  los servicios en los que el usuario actual está asignado, con
+  soporte para agendar alarmas locales (RF-055, RF-063) usando
+  `expo-notifications` y categoría custom `alarm`. Pide permiso
+  `SCHEDULE_EXACT_ALARM` en Android 12+ (RF-064) y muestra banner
+  con el estado de las alarmas agendadas. Cubre RF-054, RF-055,
+  RF-063, RF-064. Tipos, API y hooks de la feature.
+- Wrapper `src/lib/notifications.ts` sobre `expo-notifications` con
+  handler global, canal Android categoría 'alarm' (importance HIGH),
+  categoría iOS, `scheduleAlarm`, `cancelAllAlarms`,
+  `cancelAlarmsDeServicio` y `pedirPermisosAlarma`.
+- `src/lib/result.ts` con el tipo `Result<T>` compartido por todas
+  las APIs de features (antes se duplicaba inline en cada api.ts).
+- Root layout (`app/_layout.tsx`) ahora hidrata `grupoActivo` y
+  configura notificaciones al montar la app.
 - Componentes UI base: `Button` (variantes primary/secondary/danger) y
   `LabeledInput` con la paleta del proyecto (indigo + slate).
 - Routing con Expo Router: grupos `(auth)` y `(app)` con guards de
   redirección según estado de auth.
+- Index post-login ahora redirige a "Mi semana" del grupo activo si
+  hay uno persistido, o a la lista de grupos si no. La lista de
+  grupos pasa a "Mi semana" al tocar (antes iba a la vista admin de
+  asignaciones).
+- `app.json` con permisos Android de notificaciones
+  (`POST_NOTIFICATIONS`, `SCHEDULE_EXACT_ALARM`, `USE_EXACT_ALARM`,
+  `RECEIVE_BOOT_COMPLETED`, `VIBRATE`) y plugin de `expo-notifications`.
 
 ### Changed
 - `.env.example` actualizado a la nomenclatura actual de keys de Supabase
