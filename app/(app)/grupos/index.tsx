@@ -58,7 +58,7 @@ export default function GruposScreen() {
 
   const onAbrirGrupo = (g: GrupoConRol) => {
     setGrupo({ id: g.id, nombre: g.nombre, rol: g.rol });
-    router.push(`/(app)/grupos/${g.id}/mi-semana`);
+    router.push(`/(app)/grupos/${g.id}`);
   };
 
   return (

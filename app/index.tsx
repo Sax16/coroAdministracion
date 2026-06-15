@@ -35,7 +35,7 @@ export default function Index() {
   }
 
   if (grupo) {
-    return <Redirect href={`/(app)/grupos/${grupo.id}/mi-semana`} />;
+    return <Redirect href={`/(app)/grupos/${grupo.id}`} />;
   }
 
   return <Redirect href="/(app)/grupos" />;
