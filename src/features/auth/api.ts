@@ -95,6 +95,59 @@ export async function resetPassword(email: string) {
   return { ok: true as const, data: null };
 }
 
+export interface ActualizarPerfilInput {
+  nombre: string;
+  apellido: string;
+}
+
+export interface PerfilActualizado {
+  nombre: string;
+  apellido: string;
+}
+
+/**
+ * Actualiza nombre y apellido del perfil del usuario actual (RF-005).
+ *
+ * Implementación: UPDATE directo a `public.perfiles` filtrado por
+ * `id = auth.uid()`. La policy "perfiles: actualizar el propio"
+ * garantiza que un usuario solo puede editar su propio perfil, así
+ * que no hace falta un WHERE explícito con el id del store — `eq('id', uid)`
+ * lo deja claro y robusto si en el futuro se cambia la policy.
+ *
+ * El trigger `trg_perfiles_set_updated_at` actualiza `updated_at`
+ * automáticamente.
+ *
+ * **Scope MVP:** nombre y apellido. Foto y teléfono requieren Supabase
+ * Storage + image picker y se dejan para v0.2.0.
+ */
+export async function actualizarPerfil(
+  input: ActualizarPerfilInput,
+): Promise<AuthResult<PerfilActualizado>> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user.id;
+  if (!userId) {
+    return { ok: false, error: 'No hay sesión activa' };
+  }
+
+  const { data, error } = await supabase
+    .from('perfiles')
+    .update({
+      nombre: input.nombre.trim(),
+      apellido: input.apellido.trim(),
+    })
+    .eq('id', userId)
+    .select('nombre, apellido')
+    .maybeSingle();
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+  if (!data) {
+    return { ok: false, error: 'No se pudo actualizar el perfil' };
+  }
+  return { ok: true, data };
+}
+
 /**
  * Elimina la cuenta del usuario actual.
  *

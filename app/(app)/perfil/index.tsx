@@ -1,5 +1,5 @@
-import { Stack, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -17,8 +17,8 @@ import { supabase } from '@/lib/supabase';
  * Pantalla de perfil del usuario.
  *
  * Concentra todas las acciones a nivel CUENTA (no grupo):
- * - Datos básicos: email, nombre, apellido (RF-005 los expone editables
- *   en una iteración futura; acá son read-only por ahora).
+ * - Datos básicos: email, nombre, apellido. Nombre y apellido son
+ *   editables desde "Editar perfil" (RF-005).
  * - Cerrar sesión (RF-003).
  * - Eliminar cuenta (RF-006) → navega al flujo destructivo.
  *
@@ -27,8 +27,9 @@ import { supabase } from '@/lib/supabase';
  *   de `public.perfiles` (no de `auth.users`) porque esa es la fila
  *   que mantiene la app (trigger `handle_new_user` la crea al
  *   registrarse).
- * - El email puede tardar un instante en llegar del join; por eso
- *   mostramos skeleton mientras `loading`.
+ * - `useFocusEffect` para re-fetchar al volver de la pantalla de
+ *   edición. Si ya tenemos datos, el refetch es silencioso (sin
+ *   flash de ActivityIndicator) — solo actualiza en background.
  * - El botón "Eliminar cuenta" está separado abajo, en zona roja,
  *   con confirmación obligatoria. NO es un click accidental.
  */
@@ -39,28 +40,41 @@ export default function PerfilScreen() {
 
   const [nombre, setNombre] = useState<string | null>(null);
   const [apellido, setApellido] = useState<string | null>(null);
+  // `loading` solo es true en el primer load. Los refetches en
+  // background no muestran el spinner (evita un flash al volver del
+  // editor).
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
+  const fetchPerfil = useCallback(async () => {
     if (!user) return;
-    let cancelado = false;
-    (async () => {
-      const { data, error } = await supabase
-        .from('perfiles')
-        .select('nombre, apellido')
-        .eq('id', user.id)
-        .maybeSingle();
-      if (cancelado) return;
-      if (!error && data) {
-        setNombre(data.nombre);
-        setApellido(data.apellido);
-      }
-      setLoading(false);
-    })();
-    return () => {
-      cancelado = true;
-    };
-  }, [user]);
+    const isFirstLoad = nombre === null && apellido === null;
+    if (isFirstLoad) {
+      setLoading(true);
+    } else {
+      setRefreshing(true);
+    }
+    const { data, error } = await supabase
+      .from('perfiles')
+      .select('nombre, apellido')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (error) {
+      // Silencioso en refetchs; en el primer load el "—" se muestra igual.
+      console.warn('[perfil] fetch error:', error.message);
+    } else if (data) {
+      setNombre(data.nombre);
+      setApellido(data.apellido);
+    }
+    setLoading(false);
+    setRefreshing(false);
+  }, [user, nombre, apellido]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void fetchPerfil();
+    }, [fetchPerfil]),
+  );
 
   const onSignOut = async () => {
     await signOut();
@@ -79,9 +93,14 @@ export default function PerfilScreen() {
       <ScrollView contentContainerClassName="p-4">
         {/* Card de datos */}
         <View className="mb-4 rounded-lg border border-slate-200 bg-white p-4">
-          <Text className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Tu cuenta
-          </Text>
+          <View className="mb-3 flex-row items-center justify-between">
+            <Text className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Tu cuenta
+            </Text>
+            {refreshing ? (
+              <ActivityIndicator color="#4f46e5" size="small" />
+            ) : null}
+          </View>
           {loading ? (
             <View className="py-2">
               <ActivityIndicator color="#4f46e5" />
@@ -93,10 +112,14 @@ export default function PerfilScreen() {
               <DatoPerfil label="Apellido" valor={apellido ?? '—'} />
             </View>
           )}
-          <Text className="mt-3 text-xs text-slate-400">
-            La edición de estos datos llega en una próxima iteración
-            (RF-005).
-          </Text>
+          <Pressable
+            onPress={() => router.push('/(app)/perfil/editar')}
+            className="mt-3 h-10 items-center justify-center rounded-md border border-primary-600 bg-white active:bg-primary-50"
+          >
+            <Text className="text-sm font-semibold text-primary-600">
+              Editar perfil
+            </Text>
+          </Pressable>
         </View>
 
         {/* Acciones de sesión */}

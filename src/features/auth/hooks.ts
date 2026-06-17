@@ -11,7 +11,10 @@ import { useAuthStore } from '@/stores/auth';
 import { useGrupoActivoStore } from '@/stores/grupoActivo';
 
 import {
+  ActualizarPerfilInput,
   eliminarCuenta as apiEliminarCuenta,
+  actualizarPerfil as apiActualizarPerfil,
+  PerfilActualizado,
   signIn as apiSignIn,
   signUp as apiSignUp,
   SignInInput,
@@ -88,6 +91,35 @@ export function useSignOut() {
   }, [signOut]);
 
   return { signOut: doSignOut, loading };
+}
+
+/**
+ * Hook para editar nombre y apellido del perfil propio (RF-005).
+ *
+ * Devuelve el row actualizado para que el caller pueda refrescar
+ * la UI sin un fetch extra. El error es null en estado inicial y
+ * se setea ante cualquier fallo de la query.
+ */
+export function useActualizarPerfil() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const actualizar = useCallback(
+    async (input: ActualizarPerfilInput): Promise<PerfilActualizado | null> => {
+      setLoading(true);
+      setError(null);
+      const result = await apiActualizarPerfil(input);
+      setLoading(false);
+      if (!result.ok) {
+        setError(result.error);
+        return null;
+      }
+      return result.data;
+    },
+    [],
+  );
+
+  return { actualizar, loading, error, clearError: () => setError(null) };
 }
 
 /**

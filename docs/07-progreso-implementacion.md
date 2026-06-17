@@ -44,6 +44,7 @@ semana", push notifications, ensayos, comunicados, cierre de asistencia.
 | **Solicitar ingreso a grupo (RF-020 a RF-023)** | ✅ Implementado | Búsqueda por nombre, enviar solicitud, inbox admin, aprobar/rechazar. Push en 4 eventos. Migración nueva abre SELECT de grupos para descubrimiento |
 | **Eliminar cuenta (RF-006)** | ✅ Implementado | Doble barrera: pre-check en UI de grupos donde es admin (con CTAs transferir/eliminar) + tipeo literal de "ELIMINAR" + Alert.alert destructivo final. Pantallas `/(app)/perfil` y `/(app)/perfil/eliminar`. Limpia stores (grupo activo y sesión) tras éxito |
 | **Transferir admin (RF-013) y Eliminar grupo (RF-012)** | ✅ Implementado | Pantallas `/(app)/grupos/[id]/transferir-admin` y `/(app)/grupos/[id]/eliminar` con doble confirmación. Accesos admin en home del grupo. La pantalla de transferir-admin detecta `?origen=eliminar-cuenta` para volver al flujo correcto |
+| **Editar perfil (RF-005)** | ✅ Implementado | Edición de nombre y apellido desde `/(app)/perfil/editar`. Update directo a `public.perfiles` filtrado por RLS (policy "perfiles: actualizar el propio"). `useFocusEffect` en el screen padre para re-fetchar silenciosamente al volver del editor (sin flash de spinner). Foto y teléfono quedan para v0.2.0 (requieren Storage + image picker) |
 | **Smoke test prep (v0.1.0)** | ✅ Validación estática completa | `expo-doctor` 21/21, `expo export --platform all` compila los 3 bundles (iOS 4.7MB, Android 4.9MB, Web 1.8MB), typecheck + lint limpios. Fixes de peer deps aplicadas (commit `b9d1a96`). Plan de smoke test ejecutable en [`08-smoke-test.md`](./08-smoke-test.md) |
 | Routing Expo | ✅ Estructura | Grupos `(auth)` y `(app)` con guards de redirección |
 
@@ -158,6 +159,8 @@ apuntando al grupo "viejo", que un próximo login podría re-hidratar.
 persistencia en AsyncStorage, así que el próximo login (con una cuenta
 nueva) parte con `grupo=null`.
 
+## 3. Fixes aplicados durante implementación
+
 ### D-08 · Peer deps de NativeWind y lucide deben ser deps directas
 
 **Decisión:** `react-native-css-interop` (peer de `nativewind@4`) y
@@ -186,8 +189,6 @@ solo cuando es al revés; este caso es el inverso y se detecta
 corriendo `expo export`.
 
 ## 3. Fixes aplicados durante implementación
-
-### F-01 · Policy de INSERT en `perfiles` no permitía al trigger
 
 **Origen:** el bloque `_bloque2_logica.sql` original tenía la policy
 `with check (id = auth.uid())`. Esto bloquea al trigger `handle_new_user()`
@@ -300,10 +301,12 @@ cero) y con intentos de "intentar de nuevo" si algo falla a mitad.
 16. ✅ Comunicados (RF-080 → RF-084)
 17. ✅ Home del grupo (post-selección de grupo activo)
 18. ✅ Solicitar ingreso a grupo (RF-020 → RF-023)
-19. Smoke test: validación estática completa (commit `b9d1a96`), plan ejecutable
+19. ✅ Editar perfil propio (RF-005) — nombre y apellido editables
+    desde `/(app)/perfil/editar`. Foto y teléfono quedan para v0.2.0
+20. Smoke test: validación estática completa (commit `b9d1a96`), plan ejecutable
     en [`08-smoke-test.md`](./08-smoke-test.md). Ejecución de los 13 escenarios
     pendiente (requiere simulador o Expo Go en dispositivo físico).
-20. Validación de RLS con tests de seguridad (v0.2.0)
+21. Validación de RLS con tests de seguridad (v0.2.0)
 
 ## 5. Riesgos abiertos
 
