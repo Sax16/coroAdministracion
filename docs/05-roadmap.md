@@ -1,37 +1,51 @@
 # 05 · Roadmap
 
-> Plan de releases. Las fechas son orientativas; se ajustan al cerrar cada versión. Recalibrado al nuevo alcance multi-grupo. Última revisión: 2026-06-10 (post-auditoría). Ver `CHANGELOG-AUDITORIA.md`.
+> Plan de releases. Las fechas son orientativas; se ajustan al cerrar cada versión. Recalibrado al nuevo alcance multi-grupo. Última revisión: 2026-06-16 (post-RF-005, post-smoke-test-prep). Ver `CHANGELOG-AUDITORIA.md`.
 
 ## v0.1.0 — MVP 🎯 (objetivo: 8-10 semanas desde kickoff)
 
 **Objetivo:** que un director real pueda crear su grupo, configurar su patrón semanal, asignar a los miembros de la semana, cerrar la asistencia post-servicio, y que los miembros reciban push + alarma local — todo en producción real, en App Store y Play Store.
 
+**Scope confirmado por el Product Owner (2026-06-16):**
+- App mono-coro (un coro real) por ahora — el modelo multi-grupo del backend
+  se mantiene, pero el plan no apunta a SaaS multi-iglesia en v0.1.0.
+- **No se incluyen:** foto de perfil, multi-idioma. El campo `telefono`
+  en `perfiles` existe en DB pero no se expone en la UI del MVP.
+- Idioma: español (es-419) único. La columna `locale` no existe en la app.
+
 **Incluye:**
 
 - [x] Documentación de visión, stack, requerimientos y modelo de datos
-- [ ] Bootstrap del proyecto Expo + TS + NativeWind + Supabase
-- [ ] Auth (email + password) con trigger de creación de `perfiles`
-- [ ] RLS multi-tenant (helper functions + políticas en todas las tablas)
-- [ ] Crear / editar / eliminar grupo
-- [ ] Transferir Admin
-- [ ] Solicitudes de ingreso (aprobar / rechazar)
-- [ ] Listado de miembros + dar de baja lógica
-- [ ] Configurar patrón recurrente + generación automática de servicios
-- [ ] Excluir servicio puntual
-- [ ] Crear servicio excepcional
-- [ ] Asignaciones semanales con roles múltiples por servicio
-- [ ] Pantalla "Mi semana" del miembro
-- [ ] Push notifications (FCM/APNs) via Edge Function
-- [ ] Alarmas locales (categoría `alarm`, full-screen) programadas al ver "Mi semana"
-- [ ] Permiso `SCHEDULE_EXACT_ALARM` para Android 12+
-- [ ] Ensayos: crear, asignar encargado, cerrar asistencia
-- [ ] Comunicados: crear, listar, push
-- [ ] Cierre de asistencia de servicio (responsable o admin)
-- [ ] Justificaciones de miembros (texto libre)
-- [ ] Selector de grupo activo (multi-grupo)
-- [ ] Onboarding del primer admin (crear grupo)
+- [x] Bootstrap del proyecto Expo + TS + NativeWind + Supabase
+- [x] Auth (email + password) con trigger de creación de `perfiles` (RF-001 a RF-005, RF-006)
+- [x] RLS multi-tenant (helper functions + políticas en todas las tablas)
+- [x] Crear grupo (RF-010) y Eliminar grupo (RF-012)
+- [ ] **GAP** Editar datos del grupo (RF-011) — no hay `grupos/[id]/editar.tsx`
+- [x] Transferir Admin (RF-013)
+- [x] Solicitudes de ingreso (aprobar / rechazar) (RF-020 a RF-023)
+- [x] Listado de miembros + dar de baja lógica (RF-030 a RF-033)
+- [x] Configurar patrón recurrente + generación automática de servicios (RF-040, RF-041, RF-044)
+- [ ] **GAP** Excluir un servicio puntual (RF-042) — la DB tiene el estado
+      `cancelado` en `estado_evento_enum` pero la UI no expone la acción
+- [ ] **GAP** Crear servicio excepcional (RF-043) — sin UI
+- [x] Asignaciones semanales con roles múltiples por servicio (RF-050 a RF-053)
+- [x] Pantalla "Mi semana" del miembro (RF-054, RF-055)
+- [x] Push notifications (FCM/APNs) via Edge Function (RF-060 a RF-062, RF-065, RF-066)
+- [x] Alarmas locales (categoría `alarm`, full-screen) programadas al ver "Mi semana" (RF-063, RF-064)
+- [x] Permiso `SCHEDULE_EXACT_ALARM` para Android 12+
+- [x] Ensayos: crear, asignar encargado (cierre de asistencia queda para v0.2.0; ver F-RF-075)
+- [x] Comunicados: crear, listar, push (RF-080 a RF-084)
+- [x] Cierre de asistencia de servicio (responsable o admin) (RF-090 a RF-093)
+- [x] Justificaciones de miembros (texto libre) (RF-094 a RF-097)
+- [x] Selector de grupo activo (multi-grupo) (RF-015)
+- [x] Onboarding del primer admin (crear grupo) (RF-010)
 - [ ] Publicación cerrada (TestFlight + Play Internal) para 3-5 grupos beta
 - [ ] Publicación abierta en stores
+
+> **Decisión pendiente sobre los 3 gaps:** antes de la beta cerrada hay
+> que decidir si se implementan (un sprint corto cada uno) o se difieren
+> a v0.2.0 con la nota correspondiente en el CHANGELOG. Ver
+> [`07-progreso-implementacion.md`](./07-progreso-implementacion.md) §6.
 
 **Criterio de "done" del MVP:**
 
@@ -40,6 +54,7 @@
 3. La alarma local suena 1h antes del servicio en iOS y Android (verificado en al menos 2 dispositivos distintos).
 4. No hay errores en producción durante 1 semana seguida.
 5. RLS validada: un usuario de un grupo A **no puede** ver datos del grupo B por ningún endpoint.
+6. Smoke test local ejecutado contra los 13 escenarios de [`08-smoke-test.md`](./08-smoke-test.md), 0 bugs blocker.
 
 ## v0.2.0 — Calidad y robustez (post-MVP, +3-4 semanas)
 
@@ -107,7 +122,7 @@
 - App para Apple Watch
 - Reconocimiento de voz para confirmar asistencia
 - Sincronización entre dos iglesias (mismo director, varios grupos coordinados)
-- Multi-idioma
+- Editar grupo (RF-011), excluir servicio (RF-042), crear servicio excepcional (RF-043) — si se difieren de v0.1.0, entran acá
 
 ## Decisiones de release
 
@@ -125,7 +140,7 @@
 | Push notifications requieren backend para tokens | Edge Function o trigger en Supabase antes del release |
 | Alarmas locales no suenan en ciertos Android (Xiaomi) | Documentado; se recomienda a usuarios "agregar a apps protegidas". No bloquea release. |
 | RLS mal configurada filtra datos entre grupos | Tests específicos de seguridad automatizados antes de cada release |
-| El director quiere muchas features extra que no están en MVP | Regla firme: se anotan en backlog, entran en v0.2.0+ si son razonables |
+| El director quiere muchas features extra que no están en MVP | Regla firme: se anotan en backlog, entran en v0.2.0+ si son razonables. Para esta v0.1.0 el director confirmó que **no** se hacen foto de perfil ni multi-idioma |
 | Plan gratuito de Supabase se queda corto | Migración a Pro (~USD 25/mes) es trivial; documentado y presupuestado |
 
 ---
