@@ -6,7 +6,7 @@
 > [`CHANGELOG.md`](../CHANGELOG.md) (que es por release), este doc es narrativo
 > y se actualiza conforme avanzamos.
 
-> Última actualización: 2026-06-15 (sesión de Eliminar cuenta).
+> Última actualización: 2026-06-16 (sesión de Smoke test prep).
 
 ## 1. Dónde estamos
 
@@ -44,6 +44,7 @@ semana", push notifications, ensayos, comunicados, cierre de asistencia.
 | **Solicitar ingreso a grupo (RF-020 a RF-023)** | ✅ Implementado | Búsqueda por nombre, enviar solicitud, inbox admin, aprobar/rechazar. Push en 4 eventos. Migración nueva abre SELECT de grupos para descubrimiento |
 | **Eliminar cuenta (RF-006)** | ✅ Implementado | Doble barrera: pre-check en UI de grupos donde es admin (con CTAs transferir/eliminar) + tipeo literal de "ELIMINAR" + Alert.alert destructivo final. Pantallas `/(app)/perfil` y `/(app)/perfil/eliminar`. Limpia stores (grupo activo y sesión) tras éxito |
 | **Transferir admin (RF-013) y Eliminar grupo (RF-012)** | ✅ Implementado | Pantallas `/(app)/grupos/[id]/transferir-admin` y `/(app)/grupos/[id]/eliminar` con doble confirmación. Accesos admin en home del grupo. La pantalla de transferir-admin detecta `?origen=eliminar-cuenta` para volver al flujo correcto |
+| **Smoke test prep (v0.1.0)** | ✅ Validación estática completa | `expo-doctor` 21/21, `expo export --platform all` compila los 3 bundles (iOS 4.7MB, Android 4.9MB, Web 1.8MB), typecheck + lint limpios. Fixes de peer deps aplicadas (commit `b9d1a96`). Plan de smoke test ejecutable en [`08-smoke-test.md`](./08-smoke-test.md) |
 | Routing Expo | ✅ Estructura | Grupos `(auth)` y `(app)` con guards de redirección |
 
 ### Lo que FALTA para MVP (siguiente sprint) 🟡
@@ -156,6 +157,33 @@ apuntando al grupo "viejo", que un próximo login podría re-hidratar.
 **Garantía:** `clear()` borra tanto el store en memoria como la
 persistencia en AsyncStorage, así que el próximo login (con una cuenta
 nueva) parte con `grupo=null`.
+
+### D-08 · Peer deps de NativeWind y lucide deben ser deps directas
+
+**Decisión:** `react-native-css-interop` (peer de `nativewind@4`) y
+`react-native-svg` (peer de `lucide-react-native`) son deps **directas**
+del proyecto, no se confía en que aparezcan como transitivas.
+
+**Origen:** durante el smoke test prep, `expo export` falló con
+"Unable to resolve react-native-css-interop/jsx-runtime". El módulo
+estaba en `node_modules/.pnpm/...` (lo traía `nativewind`), pero pnpm
+no lo exponía en el top-level y Metro no podía resolverlo desde el
+transform de Babel. En dev con Expo Go esto "funcionaba" porque Expo
+Go resuelve transitivos, pero un build standalone (TestFlight/Play
+Internal) hubiera crasheado al primer render.
+
+**Razón:** Metro busca módulos en `node_modules` (top-level). pnpm con
+symlinks por defecto NO expone transitivos en el top-level para evitar
+"phantom dependencies" — pero eso rompe imports directos desde Babel/JSX
+runtime. La forma estándar de resolverlo es agregar la dep transitiva
+como directa.
+
+**Aplicable a:** cualquier dep que se importe en un archivo generado
+por Babel (JSX runtime, plugin runtime, etc.) y que no esté en
+`dependencies` directo. El doctor de Expo lo marca como
+"Check dependencies for packages that should not be installed directly"
+solo cuando es al revés; este caso es el inverso y se detecta
+corriendo `expo export`.
 
 ## 3. Fixes aplicados durante implementación
 
@@ -272,8 +300,10 @@ cero) y con intentos de "intentar de nuevo" si algo falla a mitad.
 16. ✅ Comunicados (RF-080 → RF-084)
 17. ✅ Home del grupo (post-selección de grupo activo)
 18. ✅ Solicitar ingreso a grupo (RF-020 → RF-023)
-19. Smoke test en TestFlight + Play Internal con 3-5 grupos reales
-20. Validación de RLS con tests de seguridad
+19. Smoke test: validación estática completa (commit `b9d1a96`), plan ejecutable
+    en [`08-smoke-test.md`](./08-smoke-test.md). Ejecución de los 13 escenarios
+    pendiente (requiere simulador o Expo Go en dispositivo físico).
+20. Validación de RLS con tests de seguridad (v0.2.0)
 
 ## 5. Riesgos abiertos
 
