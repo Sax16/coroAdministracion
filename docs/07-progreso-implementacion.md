@@ -6,8 +6,8 @@
 > [`CHANGELOG.md`](../CHANGELOG.md) (que es por release), este doc es narrativo
 > y se actualiza conforme avanzamos.
 
-> Última actualización: 2026-06-16 (sesión de Smoke test prep + RF-005
-> + reconciliación de gaps del MVP).
+> Última actualización: 2026-06-17 (cierre de los 3 gaps MUST del MVP:
+> RF-011, RF-042, RF-043).
 
 ## 1. Dónde estamos
 
@@ -27,20 +27,20 @@ ejecutable está en [`08-smoke-test.md`](./08-smoke-test.md).
 
 ### Gaps del MUST identificados al cierre 🟧
 
-Tres RF marcados como MUST en `03-requerimientos.md` no tienen UI
-implementada. La DB ya soporta lo necesario en los 3 casos; falta solo
-la capa de presentación.
+Tres RF marcados como MUST en `03-requerimientos.md` no tenían UI
+implementada. La DB ya soportaba lo necesario en los 3 casos; faltaba
+solo la capa de presentación. **Cerrados en esta sesión (2026-06-17)**:
 
-| RF | Falta | Tamaño estimado | Decisión sugerida |
-|---|---|---|---|
-| **RF-011** Editar grupo (nombre, descripción) | Pantalla `grupos/[id]/editar.tsx` + función `editarGrupo` en `grupos/api.ts`. Trigger no hace falta, RLS ya permite UPDATE a admin | 1-2 horas | **Implementar antes de la beta** — es un agujero visible para el director |
-| **RF-042** Excluir servicio puntual | UI para listar servicios futuros y marcarlos como `cancelado`. La DB ya tiene el estado en `estado_evento_enum` | 2-3 horas | **Implementar antes de la beta** — la app genera servicios automáticos, sin poder cancelar se vuelve molesto |
-| **RF-043** Crear servicio excepcional | Form simple: título, fecha, hora. Insert directo a `servicios` con `patron_id = NULL` | 2-3 horas | **Decidir con el director.** El coro podría arreglarse con el patrón recurrente + excluir puntuales. Si se difiere, no bloquea el flujo crítico |
+| RF | Commit | Decisión final |
+|---|---|---|
+| **RF-011** Editar grupo | `81ff975` | ✅ Implementado: `app/(app)/grupos/[id]/editar.tsx` + `editarGrupo()` en API + `useEditarGrupo()` en hooks. UPDATE directo a `public.grupos` filtrado por RLS admin. El home del grupo re-fetchea con `useFocusEffect` al volver del editor (sin flash) y sincroniza `grupoActivoStore` si cambió el nombre |
+| **RF-042** Excluir servicio puntual | `b40e987` | ✅ Implementado: `src/features/servicios/api.ts` (nueva feature) con `cancelarServicio()` + `useCancelarServicio()`. UI inline en `app/(app)/grupos/[id]/asignaciones/[servicioId].tsx` con zona peligrosa de admin. Badge "Cancelado" + tachado en el header. NO se borran asignaciones (quedan en historial). Push de cancelación queda como gap de RF-062 (v0.2.0) |
+| **RF-043** Crear servicio excepcional | `08ba294` | ✅ Implementado: `crearServicioExcepcional()` en la misma feature `servicios/`. Pantalla `app/(app)/grupos/[id]/servicios/nuevo.tsx` con form (título, fecha DD/MM/AAAA, hora HH:MM, lugar, descripción). INSERT con `patron_id = NULL` para que el trigger del patrón NO lo regenere. Inputs manuales (sin `expo-date-time-picker`) para no sumar deps en el MVP |
 
-Estos 3 items **corrigen** el claim que se mantuvo en sesiones previas
-("todo el MUST del MVP está hecho"). Es lo más exacto hasta hoy: las
-features core funcionan, pero hay 3 huecos que conviene cerrar antes
-de la beta cerrada. Ver §6 para el plan.
+Los 3 RFs **corrigieron** el claim que se mantuvo en sesiones previas
+("todo el MUST del MVP está hecho"). Con estos commits, la app
+realmente cumple todos los MUST del MVP. Ver §6 para el detalle de
+cada uno.
 
 ### Lo que YA está hecho ✅
 
@@ -69,6 +69,9 @@ de la beta cerrada. Ver §6 para el plan.
 | **Eliminar cuenta (RF-006)** | ✅ Implementado | Doble barrera: pre-check en UI de grupos donde es admin (con CTAs transferir/eliminar) + tipeo literal de "ELIMINAR" + Alert.alert destructivo final. Pantallas `/(app)/perfil` y `/(app)/perfil/eliminar`. Limpia stores (grupo activo y sesión) tras éxito |
 | **Transferir admin (RF-013) y Eliminar grupo (RF-012)** | ✅ Implementado | Pantallas `/(app)/grupos/[id]/transferir-admin` y `/(app)/grupos/[id]/eliminar` con doble confirmación. Accesos admin en home del grupo. La pantalla de transferir-admin detecta `?origen=eliminar-cuenta` para volver al flujo correcto |
 | **Editar perfil (RF-005)** | ✅ Implementado | Edición de nombre y apellido desde `/(app)/perfil/editar`. Update directo a `public.perfiles` filtrado por RLS (policy "perfiles: actualizar el propio"). `useFocusEffect` en el screen padre para re-fetchar silenciosamente al volver del editor (sin flash de spinner). Foto y teléfono quedan para v0.2.0 (requieren Storage + image picker) |
+| **Editar grupo (RF-011)** | ✅ Implementado | `app/(app)/grupos/[id]/editar.tsx` con form nombre + descripción. `editarGrupo()` en `src/features/grupos/api.ts` (UPDATE filtrado por RLS admin) + `useEditarGrupo()`. Home del grupo re-fetchea con `useFocusEffect` al volver y sincroniza `grupoActivoStore` si cambió el nombre |
+| **Excluir servicio puntual (RF-042)** | ✅ Implementado | Nueva feature `src/features/servicios/` con `cancelarServicio()` (UPDATE filtrado por RLS admin) + `useCancelarServicio()`. UI inline en `asignaciones/[servicioId].tsx` con zona peligrosa de admin + badge "Cancelado" + header tachado. NO borra asignaciones. **Gap residual:** push de "servicio cancelado" (parte de RF-062) no se dispara — v0.2.0 |
+| **Crear servicio excepcional (RF-043)** | ✅ Implementado | `crearServicioExcepcional()` en `src/features/servicios/api.ts` (INSERT con `patron_id = NULL`, RLS admin). Pantalla `app/(app)/grupos/[id]/servicios/nuevo.tsx` con form (título, fecha DD/MM/AAAA, hora HH:MM, lugar, descripción). Validación cliente completa (rangos, formatos, no en pasado). **Gap residual:** push de "servicio creado" (parte de RF-060) no se dispara — v0.2.0 |
 | **Smoke test prep (v0.1.0)** | ✅ Validación estática completa | `expo-doctor` 21/21, `expo export --platform all` compila los 3 bundles (iOS 4.7MB, Android 4.9MB, Web 1.8MB), typecheck + lint limpios. Fixes de peer deps aplicadas (commit `b9d1a96`). Plan de smoke test ejecutable en [`08-smoke-test.md`](./08-smoke-test.md) |
 | Routing Expo | ✅ Estructura | Grupos `(auth)` y `(app)` con guards de redirección |
 
@@ -76,9 +79,16 @@ de la beta cerrada. Ver §6 para el plan.
 
 | Prioridad | Feature | RF-### | Decisión |
 |---|---|---|---|
-| 🟥 MUST | Editar datos del grupo (nombre, descripción) | RF-011 | Implementar antes de beta |
-| 🟥 MUST | Excluir servicio puntual | RF-042 | Implementar antes de beta |
-| 🟧 SHOULD | Crear servicio excepcional | RF-043 | Decidir con PO; diferrable a v0.2.0 |
+| — | (vacío) | — | Los 3 gaps MUST se cerraron en commits `81ff975`, `b40e987`, `08ba294` (2026-06-17) |
+
+**Notas:**
+- Los 3 RFs están implementados y verificados (typecheck + lint + `expo export --platform all`).
+- **Gap residual menor:** el push de "servicio cancelado" (parte de RF-062) no se dispara
+  desde la UI de cancelación. La infra de push ya existe (Edge Function `notificar-push`),
+  pero cablear el evento `servicio_cancelado` con un trigger o desde la app queda para
+  v0.2.0. El servicio queda cancelado en DB; lo único que falta es el push a los asignados.
+- El push de "servicio creado" cuando se crea un servicio excepcional (parte de RF-060)
+  tampoco se dispara automáticamente. Mismo plan: v0.2.0.
 
 ### Lo que YA está hecho ✅
 
@@ -107,6 +117,9 @@ de la beta cerrada. Ver §6 para el plan.
 | **Eliminar cuenta (RF-006)** | ✅ Implementado | Doble barrera: pre-check en UI de grupos donde es admin (con CTAs transferir/eliminar) + tipeo literal de "ELIMINAR" + Alert.alert destructivo final. Pantallas `/(app)/perfil` y `/(app)/perfil/eliminar`. Limpia stores (grupo activo y sesión) tras éxito |
 | **Transferir admin (RF-013) y Eliminar grupo (RF-012)** | ✅ Implementado | Pantallas `/(app)/grupos/[id]/transferir-admin` y `/(app)/grupos/[id]/eliminar` con doble confirmación. Accesos admin en home del grupo. La pantalla de transferir-admin detecta `?origen=eliminar-cuenta` para volver al flujo correcto |
 | **Editar perfil (RF-005)** | ✅ Implementado | Edición de nombre y apellido desde `/(app)/perfil/editar`. Update directo a `public.perfiles` filtrado por RLS (policy "perfiles: actualizar el propio"). `useFocusEffect` en el screen padre para re-fetchar silenciosamente al volver del editor (sin flash de spinner). Foto y teléfono quedan para v0.2.0 (requieren Storage + image picker) |
+| **Editar grupo (RF-011)** | ✅ Implementado | `app/(app)/grupos/[id]/editar.tsx` con form nombre + descripción. `editarGrupo()` en `src/features/grupos/api.ts` (UPDATE filtrado por RLS admin) + `useEditarGrupo()`. Home del grupo re-fetchea con `useFocusEffect` al volver y sincroniza `grupoActivoStore` si cambió el nombre |
+| **Excluir servicio puntual (RF-042)** | ✅ Implementado | Nueva feature `src/features/servicios/` con `cancelarServicio()` (UPDATE filtrado por RLS admin) + `useCancelarServicio()`. UI inline en `asignaciones/[servicioId].tsx` con zona peligrosa de admin + badge "Cancelado" + header tachado. NO borra asignaciones. **Gap residual:** push de "servicio cancelado" (parte de RF-062) no se dispara — v0.2.0 |
+| **Crear servicio excepcional (RF-043)** | ✅ Implementado | `crearServicioExcepcional()` en `src/features/servicios/api.ts` (INSERT con `patron_id = NULL`, RLS admin). Pantalla `app/(app)/grupos/[id]/servicios/nuevo.tsx` con form (título, fecha DD/MM/AAAA, hora HH:MM, lugar, descripción). Validación cliente completa (rangos, formatos, no en pasado). **Gap residual:** push de "servicio creado" (parte de RF-060) no se dispara — v0.2.0 |
 | **Smoke test prep (v0.1.0)** | ✅ Validación estática completa | `expo-doctor` 21/21, `expo export --platform all` compila los 3 bundles (iOS 4.7MB, Android 4.9MB, Web 1.8MB), typecheck + lint limpios. Fixes de peer deps aplicadas (commit `b9d1a96`). Plan de smoke test ejecutable en [`08-smoke-test.md`](./08-smoke-test.md) |
 | Routing Expo | ✅ Estructura | Grupos `(auth)` y `(app)` con guards de redirección |
 
@@ -344,17 +357,15 @@ cero) y con intentos de "intentar de nuevo" si algo falla a mitad.
 - ✅ ~~Push infra (Edge Function + `dispositivos` + feature)~~ (commiteado)
 - ✅ ~~Smoke test prep estático (doctor 21/21 + export 3 plataformas)~~ (commiteado en `b9d1a96`)
 - ✅ ~~Editar perfil propio (RF-005)~~ (commiteado en `4367fc4`)
+- ✅ ~~Cerrar los 3 gaps MUST del MVP (RF-011, RF-042, RF-043)~~ (commits `81ff975`, `b40e987`, `08ba294` en esta sesión)
 
 ### Antes de beta (gaps MUST detectados)
 
-- 🟥 **Cerrar 3 gaps MUST antes de TestFlight/Play Internal:**
-  - RF-011 Editar grupo (1-2h, RLS ya permite)
-  - RF-042 Excluir servicio puntual (2-3h, enum `cancelado` ya existe)
-  - RF-043 Crear servicio excepcional (2-3h, **decidir con PO**)
+- ✅ **Cerrados los 3 gaps MUST** (commits `81ff975` RF-011, `b40e987` RF-042, `08ba294` RF-043) — typecheck/lint/export limpios
 - 🟧 Smoke test E2E: ejecutar los 13 escenarios de `08-smoke-test.md`
   (requiere simulador iOS o emulador Android, o Expo Go en dispositivo físico)
 - 🟧 Rotar `SUPABASE_SERVICE_ROLE_KEY` y `DATABASE_URL` del `.env` dev
-  (estos se filtraron en un output de Bash de esta sesión; documentar
+  (estos se filtraron en un output de Bash de la sesión 2026-06-16; documentar
   como riesgo R-6)
 
 ### Post-beta / v0.2.0
@@ -377,37 +388,70 @@ cero) y con intentos de "intentar de nuevo" si algo falla a mitad.
 | R-5 | Costos de Apple Developer + Google Play los asume el grupo | Documentado en `01-vision-y-alcance.md` §8 |
 | R-6 | `SUPABASE_SERVICE_ROLE_KEY` y `DATABASE_URL` del `.env` dev se filtraron en output de Bash (sesión 2026-06-16) | Rotar ambas credenciales desde el dashboard de Supabase antes de la beta |
 | R-7 | Tooling nativo (Xcode full, JDK, Android Studio) no instalado en el entorno de dev | Bloqueante solo para builds nativos; Expo Go cubre el smoke test |
-| R-8 | 3 RF MUST sin UI (RF-011, RF-042, RF-043) detectados al cierre del MVP | Ver §6 — plan de cierre antes de beta |
+| R-8 | 3 RF MUST sin UI (RF-011, RF-042, RF-043) detectados al cierre del MVP | **Resuelto** (2026-06-17): commits `81ff975`, `b40e987`, `08ba294`. Único residuo: el push de "servicio cancelado" (parte de RF-062) no se dispara desde la UI de cancelación — queda para v0.2.0 |
 
-## 6. Plan de cierre de gaps del MVP
+## 6. Plan de cierre de gaps del MVP ✅
 
-Los 3 gaps MUST pendientes son chicos individualmente pero juntos definen
-si la v0.1.0 está lista para TestFlight. Plan tentativo:
+Los 3 gaps MUST identificados al cierre se implementaron en la sesión
+2026-06-17. Detalle por RF:
 
-### Sprint sugerido (~1 semana)
+### 6.1 RF-011 — Editar grupo (commit `81ff975`)
 
-1. **RF-011 Editar grupo** (1-2h)
-   - Crear `app/(app)/grupos/[id]/editar.tsx` (form nombre + descripción)
-   - Agregar `editarGrupo` a `grupos/api.ts` (UPDATE directo a `grupos`,
-     filtrado por RLS admin)
-   - Agregar `useEditarGrupo` a `grupos/hooks.ts`
-   - Botón "Editar" en el home del grupo (solo visible para admin)
+- `src/features/grupos/api.ts` → `editarGrupo({ id, nombre, descripcion })`:
+  UPDATE directo a `public.grupos` filtrado por RLS
+  "grupos: actualizar solo admin". Trigger `trg_grupos_set_updated_at`
+  mantiene el timestamp fresco.
+- `src/features/grupos/hooks.ts` → `useEditarGrupo()` con loading + error,
+  mismo patrón que `useActualizarPerfil`.
+- `app/(app)/grupos/[id]/editar.tsx`: form con `LabeledInput` para nombre
+  y descripción, pre-populado con valores actuales, validación cliente
+  (nombre 2-80 chars, descripción 0-200). Al guardar, `router.back()`.
+- `app/(app)/grupos/[id]/index.tsx`: convertí el `useEffect` a
+  `useFocusEffect` para re-fetchar al volver del editor. Si los datos
+  del grupo activo cambiaron, sincronizo `grupoActivoStore` así el
+  header se ve fresco sin esperar al refetch.
 
-2. **RF-042 Excluir servicio puntual** (2-3h)
-   - Crear `app/(app)/grupos/[id]/servicios/[servicioId]/cancelar.tsx`
-     o acción inline en la lista de servicios
-   - UPDATE directo a `servicios.estado = 'cancelado'`
-   - Push opcional a asignados (puede ser v0.2.0)
-   - El servicio cancelado NO se re-genera por el trigger (decisión
-     documentada en la migración, F-04 complementario)
+### 6.2 RF-042 — Excluir servicio puntual (commit `b40e987`)
 
-3. **RF-043 Crear servicio excepcional** (2-3h, **decidir con PO primero**)
-   - Crear `app/(app)/grupos/[id]/servicios/crear.tsx`
-   - Form: título, fecha, hora, descripción
-   - INSERT a `servicios` con `patron_id = NULL` (es la marca de "excepcional")
-   - RLS ya permite insert a admin del grupo
-   - **Si el director dice que el coro no necesita servicios
-     excepcionales** (ej. solo usa el patrón + excluye puntuales),
-     se difiere a v0.2.0 con nota en CHANGELOG.
+- `src/features/servicios/api.ts` (nueva feature) → `cancelarServicio(id)`:
+  UPDATE directo a `public.servicios` con `estado = 'cancelado'`, filtrado
+  por RLS "servicios: actualizar solo admin". NO borra asignaciones
+  (quedan en el historial).
+- `src/features/servicios/hooks.ts` → `useCancelarServicio()` con loading
+  + error.
+- `app/(app)/grupos/[id]/asignaciones/[servicioId].tsx`:
+  - Badge "Cancelado" en el header del servicio + tachado del título/hora
+  - Bloquea el botón "Asignar" si el servicio está cancelado
+  - Zona peligrosa al final: "Cancelar este servicio" (visible solo para
+    admin y si `estado = 'programado'`) con doble `Alert.alert` (destructivo)
+  - Banner informativo si ya está cancelado ("no se puede revertir desde
+    la app en esta versión")
 
-**Cierre total:** 1-2 sprints chicos, todos chicos individualmente.
+**Gap residual:** el push de "servicio cancelado" (parte de RF-062) NO se
+dispara automáticamente. La infra de push existe (Edge Function
+`notificar-push`) pero cablear este evento queda para v0.2.0 — el
+servicio queda cancelado en DB, lo único que falta es el push.
+
+### 6.3 RF-043 — Crear servicio excepcional (commit `08ba294`)
+
+- `src/features/servicios/api.ts` → `crearServicioExcepcional({ grupoId, titulo,
+  fechaInicio, lugar, descripcion })`: INSERT directo a `public.servicios`
+  con `patron_id = NULL` (marca de "excepcional" — el trigger del patrón NO
+  lo regenera). RLS "servicios: insertar solo admin" valida el caller.
+- `app/(app)/grupos/[id]/servicios/nuevo.tsx`: form con título, fecha
+  (DD/MM/AAAA), hora (HH:MM), lugar opcional, descripción opcional.
+  Inputs manuales con `inputMode="numeric"` (no usamos
+  `expo-date-time-picker` para no sumar deps en el MVP — es trivial
+  cambiar a un picker nativo en v0.2.0 si querés mejor UX).
+  Validación cliente completa: rangos, formatos, fecha no en pasado
+  (margen 1 min), `31/02` → error explícito.
+- `app/(app)/grupos/[id]/index.tsx`: `AccesoCard` "Servicio excepcional"
+  (✨, indigo) en el grid de admin, al lado de "Asignaciones".
+
+**Gap residual:** el push de "servicio creado" para el servicio excepcional
+(parte de RF-060) tampoco se dispara. Mismo plan: v0.2.0.
+
+**Verificación común a los 3 commits:**
+- `pnpm typecheck` → limpio
+- `pnpm lint` → 0 errores
+- `expo export --platform all` → iOS 4.7MB, Android 4.9MB, Web 1.8MB

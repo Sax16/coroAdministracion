@@ -20,14 +20,13 @@
 - [x] Auth (email + password) con trigger de creación de `perfiles` (RF-001 a RF-005, RF-006)
 - [x] RLS multi-tenant (helper functions + políticas en todas las tablas)
 - [x] Crear grupo (RF-010) y Eliminar grupo (RF-012)
-- [ ] **GAP** Editar datos del grupo (RF-011) — no hay `grupos/[id]/editar.tsx`
+- [x] Editar datos del grupo (RF-011) — commit `81ff975`
 - [x] Transferir Admin (RF-013)
 - [x] Solicitudes de ingreso (aprobar / rechazar) (RF-020 a RF-023)
 - [x] Listado de miembros + dar de baja lógica (RF-030 a RF-033)
 - [x] Configurar patrón recurrente + generación automática de servicios (RF-040, RF-041, RF-044)
-- [ ] **GAP** Excluir un servicio puntual (RF-042) — la DB tiene el estado
-      `cancelado` en `estado_evento_enum` pero la UI no expone la acción
-- [ ] **GAP** Crear servicio excepcional (RF-043) — sin UI
+- [x] Excluir un servicio puntual (RF-042) — commit `b40e987`
+- [x] Crear servicio excepcional (RF-043) — commit `08ba294`
 - [x] Asignaciones semanales con roles múltiples por servicio (RF-050 a RF-053)
 - [x] Pantalla "Mi semana" del miembro (RF-054, RF-055)
 - [x] Push notifications (FCM/APNs) via Edge Function (RF-060 a RF-062, RF-065, RF-066)
@@ -42,10 +41,10 @@
 - [ ] Publicación cerrada (TestFlight + Play Internal) para 3-5 grupos beta
 - [ ] Publicación abierta en stores
 
-> **Decisión pendiente sobre los 3 gaps:** antes de la beta cerrada hay
-> que decidir si se implementan (un sprint corto cada uno) o se difieren
-> a v0.2.0 con la nota correspondiente en el CHANGELOG. Ver
-> [`07-progreso-implementacion.md`](./07-progreso-implementacion.md) §6.
+> **Decisión sobre los 3 gaps:** cerrados antes de la beta cerrada.
+> Commits: `81ff975` (RF-011), `b40e987` (RF-042), `08ba294` (RF-043).
+> Ver [`07-progreso-implementacion.md`](./07-progreso-implementacion.md) §6
+> para el detalle de cada uno.
 
 **Criterio de "done" del MVP:**
 
@@ -122,7 +121,6 @@
 - App para Apple Watch
 - Reconocimiento de voz para confirmar asistencia
 - Sincronización entre dos iglesias (mismo director, varios grupos coordinados)
-- Editar grupo (RF-011), excluir servicio (RF-042), crear servicio excepcional (RF-043) — si se difieren de v0.1.0, entran acá
 
 ## Decisiones de release
 
