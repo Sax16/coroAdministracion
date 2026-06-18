@@ -13,6 +13,8 @@ import {
 
 import { Button } from '@/components/Button';
 import { useGestionAsignaciones, useMiembrosGrupo, useServiciosSemana } from '@/features/asignaciones/hooks';
+import { useCancelarServicio } from '@/features/servicios/hooks';
+import { GrupoConRol, listarMisGrupos } from '@/features/grupos/api';
 import {
   formatearDiaLargo,
   formatearHora,
@@ -25,27 +27,36 @@ import {
   RolServicio,
   ServicioConAsignaciones,
 } from '@/features/asignaciones/types';
+import { useAuthStore } from '@/stores/auth';
 
 /**
  * Pantalla para asignar / editar asignaciones de UN servicio concreto
- * (RF-051, RF-052, RF-053).
+ * (RF-051, RF-052, RF-053) y para cancelarlo (RF-042).
  *
  * Layout:
- * - Header: hora del servicio + título + cantidad de asignados
+ * - Header: hora del servicio + título + cantidad de asignados +
+ *   badge "Cancelado" si aplica.
  * - Sección "Asignados": lista de miembros ya asignados, agrupados por
  *   persona, con un botón "Quitar" al lado de cada uno.
  * - Sección "Agregar asignación": picker de miembro (searchable) +
  *   chips de roles (multi-select). El botón "Asignar" se habilita
  *   cuando hay un miembro seleccionado y al menos un rol.
+ * - Zona peligrosa (solo admin, RF-042): botón "Cancelar este servicio"
+ *   visible si el servicio está programado y aún no empezó. Si ya
+ *   está cancelado, se muestra un banner "Cancelado" en lugar del CTA.
  *
  * Decisiones:
- * - Solo admin puede asignar. La RLS valida de vuelta en el INSERT.
+ * - Solo admin puede asignar y cancelar. La RLS valida de vuelta en
+ *   cada INSERT/UPDATE.
  * - Un mismo miembro puede tener varios roles (RF-052) en este servicio:
  *   el chip se muestra en su card, y se pueden agregar más roles
  *   tocándolo de nuevo (toggle on/off).
  * - RF-053 (editar): la edición se hace toda desde acá — agregar rol,
  *   quitar rol individual, o quitar al miembro completo del servicio.
  *   No hay UPDATE: agregar es INSERT, quitar es DELETE.
+ * - RF-042 (cancelar): la confirmación es doble (Alert.alert) porque
+ *   es destructiva a nivel de planificación. NO borra asignaciones:
+ *   quedan en el historial.
  */
 export default function AsignarServicioScreen() {
   const router = useRouter();
@@ -53,6 +64,7 @@ export default function AsignarServicioScreen() {
     id: string;
     servicioId: string;
   }>();
+  const user = useAuthStore((s) => s.user);
 
   // Para encontrar el servicio, recargamos la semana que lo contiene.
   // Truco barato: pedimos la semana actual y, si no está, vamos para
@@ -80,6 +92,27 @@ export default function AsignarServicioScreen() {
   const { miembros, loading: loadingMiembros } = useMiembrosGrupo(grupoId ?? '');
   const { crear, crearVarios, eliminar, eliminarDeMiembro, loading: guardando, error, clearError } =
     useGestionAsignaciones();
+  const { cancelar, loading: cancelando, error: errorCancel } = useCancelarServicio();
+
+  // Rol del usuario en el grupo (para habilitar el CTA de cancelación)
+  const [esAdmin, setEsAdmin] = useState(false);
+  const [cargandoRol, setCargandoRol] = useState(true);
+  useEffect(() => {
+    if (!grupoId || !user) return;
+    let cancelado = false;
+    (async () => {
+      const r = await listarMisGrupos();
+      if (cancelado) return;
+      if (r.ok) {
+        const g = (r.data as GrupoConRol[]).find((x) => x.id === grupoId);
+        if (g) setEsAdmin(g.rol === 'admin');
+      }
+      setCargandoRol(false);
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [grupoId, user]);
 
   const [miembroSeleccionado, setMiembroSeleccionado] = useState<MiembroGrupo | null>(null);
   const [rolesSeleccionados, setRolesSeleccionados] = useState<Set<RolServicio>>(new Set());
@@ -179,6 +212,31 @@ export default function AsignarServicioScreen() {
     [eliminar, refetch],
   );
 
+  // RF-042: cancelar este servicio. Doble confirmación porque es
+  // destructivo a nivel de planificación — los asignados se enteran
+  // de que ya no corre. NO se borran las asignaciones: quedan en el
+  // historial (la UI las ignora con `estado === 'cancelado'`).
+  const onCancelar = useCallback(() => {
+    if (!servicio) return;
+    Alert.alert(
+      '¿Cancelar este servicio?',
+      'El servicio queda como cancelado. Los miembros asignados lo verán tachado en la vista semanal. Esta acción NO se puede deshacer desde la app.',
+      [
+        { text: 'Volver', style: 'cancel' },
+        {
+          text: 'Sí, cancelar',
+          style: 'destructive',
+          onPress: async () => {
+            const r = await cancelar(servicio.id);
+            if (r) {
+              await refetch();
+            }
+          },
+        },
+      ],
+    );
+  }, [servicio, cancelar, refetch]);
+
   if (loadingServicios || loadingMiembros) {
     return (
       <View className="flex-1 items-center justify-center bg-slate-50">
@@ -226,12 +284,29 @@ export default function AsignarServicioScreen() {
         <ScrollView contentContainerClassName="pb-10" keyboardShouldPersistTaps="handled">
           {/* Encabezado del servicio */}
           <View className="m-4 rounded-lg border border-slate-200 bg-white p-4">
-            <Text className="text-sm text-slate-500">{formatearDiaLargo(diaSemana)}</Text>
-            <Text className="mt-1 text-3xl font-bold text-slate-900">
+            <View className="flex-row items-center justify-between">
+              <Text className="text-sm text-slate-500">{formatearDiaLargo(diaSemana)}</Text>
+              {servicio.estado === 'cancelado' ? (
+                <View className="rounded-full bg-slate-200 px-2.5 py-0.5">
+                  <Text className="text-xs font-medium text-slate-600">Cancelado</Text>
+                </View>
+              ) : null}
+            </View>
+            <Text
+              className={`mt-1 text-3xl font-bold ${
+                servicio.estado === 'cancelado' ? 'text-slate-400 line-through' : 'text-slate-900'
+              }`}
+            >
               {formatearHora(servicio.fecha_inicio)}
             </Text>
             {servicio.titulo ? (
-              <Text className="mt-1 text-base text-slate-700">{servicio.titulo}</Text>
+              <Text
+                className={`mt-1 text-base ${
+                  servicio.estado === 'cancelado' ? 'text-slate-400 line-through' : 'text-slate-700'
+                }`}
+              >
+                {servicio.titulo}
+              </Text>
             ) : null}
             <Text className="mt-3 text-sm text-slate-600">
               {servicio.asignaciones.length === 0
@@ -375,10 +450,59 @@ export default function AsignarServicioScreen() {
                 title="Asignar"
                 onPress={onAsignar}
                 loading={guardando}
-                disabled={!miembroSeleccionado || rolesSeleccionados.size === 0}
+                disabled={
+                  !miembroSeleccionado ||
+                  rolesSeleccionados.size === 0 ||
+                  servicio.estado === 'cancelado'
+                }
               />
             </View>
           </View>
+
+          {/* Zona de cancelación (RF-042). Solo visible para admin y
+              si el servicio está programado (no realizado, no cancelado)
+              y aún no empezó. Si está cancelado, mostramos banner. */}
+          {!cargandoRol && esAdmin && servicio.estado === 'cancelado' ? (
+            <View className="mx-4 mb-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <Text className="text-sm font-semibold text-slate-700">
+                Este servicio fue cancelado
+              </Text>
+              <Text className="mt-1 text-xs text-slate-500">
+                Las asignaciones se conservan en el historial. Si necesitás
+                revertirlo, contactá al admin del sistema (no se puede
+                desde la app en esta versión).
+              </Text>
+            </View>
+          ) : null}
+          {!cargandoRol && esAdmin && servicio.estado === 'programado' ? (
+            <View className="mx-4 mb-3 rounded-lg border border-rose-200 bg-rose-50 p-4">
+              <Text className="text-sm font-semibold text-rose-900">
+                Cancelar este servicio
+              </Text>
+              <Text className="mt-1 text-xs text-rose-800">
+                Marca el servicio como cancelado. Los miembros asignados lo
+                verán tachado en su semana. Las asignaciones NO se borran.
+              </Text>
+              {errorCancel ? (
+                <Text className="mt-2 text-xs text-rose-900">{errorCancel}</Text>
+              ) : null}
+              <Pressable
+                onPress={onCancelar}
+                disabled={cancelando}
+                className={`mt-3 h-11 items-center justify-center rounded-md ${
+                  cancelando ? 'bg-rose-300' : 'bg-rose-600 active:bg-rose-700'
+                }`}
+              >
+                {cancelando ? (
+                  <ActivityIndicator color="#ffffff" />
+                ) : (
+                  <Text className="text-sm font-semibold text-white">
+                    Cancelar este servicio
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+          ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
     </>
