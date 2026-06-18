@@ -133,6 +133,49 @@ export async function transferirAdmin(input: {
   }
 }
 
+// =============================================================================
+// Editar grupo (RF-011)
+// =============================================================================
+
+/**
+ * Edita nombre y descripción de un grupo (RF-011).
+ *
+ * Implementación: UPDATE directo a `public.grupos` filtrado por
+ * `id = grupoId`. La RLS "grupos: actualizar solo admin" exige que el
+ * usuario actual sea admin del grupo, así que no hace falta validar
+ * nada del lado de la app — la DB rechaza el UPDATE con 403/42501 si
+ * no sos admin.
+ *
+ * El trigger `trg_grupos_set_updated_at` mantiene el timestamp fresco.
+ *
+ * Solo se editan nombre y descripción (scope del MVP). El `admin_id` y
+ * la zona horaria se manejan en flujos separados (RF-013 y v0.2.0).
+ */
+export async function editarGrupo(input: {
+  id: string;
+  nombre: string;
+  descripcion: string | null;
+}): Promise<Result<{ id: string; nombre: string; descripcion: string | null }>> {
+  try {
+    const { data, error } = await supabase
+      .from('grupos')
+      .update({
+        nombre: input.nombre.trim(),
+        descripcion: input.descripcion?.trim() || null,
+      })
+      .eq('id', input.id)
+      .select('id, nombre, descripcion')
+      .maybeSingle();
+
+    if (error) return { ok: false, error: error.message };
+    if (!data) return { ok: false, error: 'No se pudo actualizar el grupo' };
+
+    return { ok: true, data };
+  } catch (e) {
+    return { ok: false, error: mapErr(e) };
+  }
+}
+
 /**
  * Elimina (soft delete) un grupo (RF-012).
  *
@@ -142,7 +185,7 @@ export async function transferirAdmin(input: {
  *
  * Después de esto, el grupo ya no aparece en ningún listado (la RLS +
  * la helper `usuario_grupos_activos()` filtran por `estado='activo'`).
- * Los datos históricos (servicios, asignaciones, etc.) se conservan.
+ * Los datos históricos (servicios, ensayos, asignaciones, etc.) se conservan.
  */
 export async function eliminarGrupo(grupoId: string): Promise<Result<null>> {
   try {

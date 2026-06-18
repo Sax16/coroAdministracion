@@ -1,5 +1,5 @@
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -15,6 +15,7 @@ import { useServiciosSemana } from '@/features/asignaciones/hooks';
 import { useSolicitudesPendientes } from '@/features/solicitudes/hooks';
 import { GrupoConRol, listarMisGrupos } from '@/features/grupos/api';
 import { useAuthStore } from '@/stores/auth';
+import { useGrupoActivoStore } from '@/stores/grupoActivo';
 import {
   formatearDiaCorto,
   formatearHora,
@@ -42,6 +43,8 @@ export default function GrupoHomeScreen() {
   const router = useRouter();
   const { id: grupoId } = useLocalSearchParams<{ id: string }>();
   const user = useAuthStore((s) => s.user);
+  const grupoActivo = useGrupoActivoStore((s) => s.grupo);
+  const setGrupo = useGrupoActivoStore((s) => s.setGrupo);
 
   const lunes = useMemo(() => getLunesSemana(new Date()), []);
 
@@ -52,36 +55,42 @@ export default function GrupoHomeScreen() {
   const [patronConfigurado, setPatronConfigurado] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
+  /**
+   * Carga info del grupo + patrón. Convierto el `useEffect` a
+   * `useFocusEffect` para que el home re-fetchee al volver de la
+   * pantalla de edición (RF-011) sin flash de "Cargando…".
+   * Si los datos ya están y solo cambiaron, el spinner no se muestra.
+   */
+  const cargarInfoGrupo = useCallback(async () => {
     if (!grupoId || !user) return;
-    let cancelado = false;
-    (async () => {
-      // 1. Info del grupo + rol del usuario
-      const r = await listarMisGrupos();
-      if (cancelado) return;
-      if (r.ok) {
-        const g = (r.data as GrupoConRol[]).find((x) => x.id === grupoId);
-        if (g) {
-          setNombreGrupo(g.nombre);
-          setDescripcionGrupo(g.descripcion);
-          setEsAdmin(g.rol === 'admin');
-        }
+    const r = await listarMisGrupos();
+    if (!r.ok) return;
+    const g = (r.data as GrupoConRol[]).find((x) => x.id === grupoId);
+    if (g) {
+      setNombreGrupo(g.nombre);
+      setDescripcionGrupo(g.descripcion);
+      setEsAdmin(g.rol === 'admin');
+      // Si este grupo es el activo en el store y le cambiaron el nombre,
+      // sincronizamos el store para que el header se vea fresco.
+      if (grupoActivo?.id === grupoId && grupoActivo.nombre !== g.nombre) {
+        setGrupo({ ...grupoActivo, nombre: g.nombre });
       }
+    }
+    // ¿Hay patrón configurado? (para mostrar CTA si no)
+    const { data: patron } = await supabase
+      .from('patrones_recurrentes')
+      .select('grupo_id')
+      .eq('grupo_id', grupoId)
+      .maybeSingle();
+    setPatronConfigurado(!!patron);
+    setCargandoGrupo(false);
+  }, [grupoId, user, grupoActivo, setGrupo]);
 
-      // 2. ¿Hay patrón configurado? (para mostrar CTA si no)
-      const { data: patron } = await supabase
-        .from('patrones_recurrentes')
-        .select('grupo_id')
-        .eq('grupo_id', grupoId)
-        .maybeSingle();
-      if (!cancelado) setPatronConfigurado(!!patron);
-
-      if (!cancelado) setCargandoGrupo(false);
-    })();
-    return () => {
-      cancelado = true;
-    };
-  }, [grupoId, user]);
+  useFocusEffect(
+    useCallback(() => {
+      void cargarInfoGrupo();
+    }, [cargarInfoGrupo]),
+  );
 
   // Servicios de esta semana
   const {
@@ -240,6 +249,15 @@ export default function GrupoHomeScreen() {
                 emoji="🔁"
                 color="slate"
                 onPress={() => router.push(`/(app)/grupos/${grupoId}/transferir-admin`)}
+              />
+            ) : null}
+            {esAdmin ? (
+              <AccesoCard
+                titulo="Editar grupo"
+                subtitulo="Cambiar nombre o descripción"
+                emoji="✏️"
+                color="slate"
+                onPress={() => router.push(`/(app)/grupos/${grupoId}/editar`)}
               />
             ) : null}
             {esAdmin ? (

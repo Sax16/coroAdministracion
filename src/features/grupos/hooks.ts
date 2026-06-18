@@ -7,6 +7,7 @@ import { GrupoActivo, useGrupoActivoStore } from '@/stores/grupoActivo';
 
 import {
   crearGrupo as apiCrearGrupo,
+  editarGrupo as apiEditarGrupo,
   eliminarGrupo as apiEliminarGrupo,
   listarGruposAdminActivos as apiListarGruposAdminActivos,
   listarMisGrupos,
@@ -134,6 +135,43 @@ export function useAccionesGrupo() {
     error,
     clearError: () => setError(null),
   };
+}
+
+// =============================================================================
+// Editar grupo (RF-011)
+// =============================================================================
+
+/**
+ * Hook para editar nombre y descripción de un grupo (RF-011).
+ *
+ * Devuelve el row actualizado (incluyendo `id`, `nombre`, `descripcion`)
+ * para que la pantalla pueda navegar atrás y el padre re-fetchee con
+ * los datos nuevos. Mismo patrón que `useActualizarPerfil`.
+ */
+export function useEditarGrupo() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const editar = useCallback(
+    async (input: {
+      id: string;
+      nombre: string;
+      descripcion: string | null;
+    }): Promise<{ id: string; nombre: string; descripcion: string | null } | null> => {
+      setLoading(true);
+      setError(null);
+      const r = await apiEditarGrupo(input);
+      setLoading(false);
+      if (!r.ok) {
+        setError(r.error);
+        return null;
+      }
+      return r.data;
+    },
+    [],
+  );
+
+  return { editar, loading, error, clearError: () => setError(null) };
 }
 
 /**
