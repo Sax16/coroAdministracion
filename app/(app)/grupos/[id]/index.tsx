@@ -222,6 +222,15 @@ export default function GrupoHomeScreen() {
             ) : null}
             {esAdmin ? (
               <AccesoCard
+                titulo="Servicio excepcional"
+                subtitulo="Crear un servicio fuera del patrón"
+                emoji="✨"
+                color="indigo"
+                onPress={() => router.push(`/(app)/grupos/${grupoId}/servicios/nuevo`)}
+              />
+            ) : null}
+            {esAdmin ? (
+              <AccesoCard
                 titulo={
                   solicitudesPendientes.length > 0
                     ? `Solicitudes (${solicitudesPendientes.length})`
