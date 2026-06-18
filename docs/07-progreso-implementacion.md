@@ -90,6 +90,19 @@ cada uno.
 - El push de "servicio creado" cuando se crea un servicio excepcional (parte de RF-060)
   tampoco se dispara automáticamente. Mismo plan: v0.2.0.
 
+**Security linter (Supabase):**
+- 🟥 **2 warnings del linter** sobre `public.v_mi_semana` y
+  `public.v_asistencia_servicio`: el linter las flaguea como
+  `security_definer_view`. Las vistas estaban creadas con
+  `CREATE OR REPLACE VIEW ... AS` sin atributo, lo que en Postgres 15+
+  las hace INVOKER por default, pero el linter las flaguea por el patrón
+  (leen tablas con RLS, usan `auth.uid()` y JOINs). Migración preparada:
+  `20260617000000_vistas_security_invoker.sql`. **Aplicar antes de
+  la beta** — el fix es `DROP VIEW + CREATE VIEW ... WITH (security_invoker = true)`.
+  El comportamiento de la app NO cambia (las RLS subyacentes ya filtran
+  por grupo del caller). El linter se silencia porque la vista queda
+  explícitamente marcada como segura.
+
 ### Lo que YA está hecho ✅
 
 | Área | Estado | Detalle |

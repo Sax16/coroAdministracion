@@ -1019,8 +1019,14 @@ Stub para v0.1.0. La implementación se detalla al construir la edge function.
 ## 8. Vistas
 
 ```sql
--- Vista principal de la pantalla "Mi semana" (con roles agrupados)
-create or replace view v_mi_semana as
+-- Vista principal de la pantalla "Mi semana" (con roles agrupados).
+-- SECURITY INVOKER: las RLS de servicios / asignaciones_servicio se aplican
+-- al caller, así que solo ve servicios de sus grupos activos. Filtros
+-- adicionales: estado=programado y rango de 14 días. Ver migración
+-- 20260617000000_vistas_security_invoker.sql.
+create or replace view v_mi_semana
+  with (security_invoker = true)
+as
 select
   s.id              as servicio_id,
   s.grupo_id,
@@ -1043,10 +1049,14 @@ where s.estado = 'programado'
   and s.fecha_inicio <  now() + interval '14 days'
 group by s.id;
 
--- Resumen de asistencia de un servicio
+-- Resumen de asistencia de un servicio.
 -- M-24: el contador q_sin_cerrar se eliminó. Las filas de estados_asistencia_servicio
 -- se crean al asignar (con default 'asistio'), por lo que ese contador siempre sería 0.
-create or replace view v_asistencia_servicio as
+-- SECURITY INVOKER: RLS de las 3 tablas aplica al caller. Ver migración
+-- 20260617000000_vistas_security_invoker.sql.
+create or replace view v_asistencia_servicio
+  with (security_invoker = true)
+as
 select
   s.id   as servicio_id,
   count(*) filter (where eas.estado = 'asistio')     as q_asistio,
