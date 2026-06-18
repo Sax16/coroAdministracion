@@ -86,14 +86,29 @@ export interface ServicioCreado {
 /**
  * Crea un servicio excepcional, fuera del patrón recurrente (RF-043).
  *
- * Implementación: INSERT directo a `public.servicios` con
- * `patron_id = NULL` (los servicios del patrón lo tienen seteado al
- * id del `patrones_recurrentes` que los generó; los excepcionales
- * nacen sin patrón). El resto de campos quedan en default:
- * `estado = 'programado'`, `tipo = 'servicio'`, etc.
+ * Implementación: INSERT directo a `public.servicios`. El resto de
+ * campos quedan en default: `estado = 'programado'`, `tipo = 'servicio'`.
  *
  * La RLS "servicios: insertar solo admin" exige que el caller sea
  * admin del grupo.
+ *
+ * **Sobre la distinción "excepcional" vs "del patrón":** la DB no
+ * tiene un campo `patron_id` en `servicios` (no se modeló la
+ * distinción en la v0.1.0). Los servicios del patrón recurrente y
+ * los excepcionales son filas idénticas desde el punto de vista del
+ * schema. La diferencia funcional la da el `UNIQUE(grupo_id,
+ * fecha_inicio)` de la tabla: si el admin tiene configurado un
+ * servicio del patrón en `2026-06-25 21:00` y crea un excepcional
+ * en la misma fecha/hora, el primero va a sobrevivir a la próxima
+ * corrida del trigger (que hace `ON CONFLICT DO NOTHING`). Si crea
+ * el excepcional en una fecha/hora NO cubierta por el patrón, queda
+ * persistente sin que el trigger lo toque.
+ *
+ * Modelar "excepcional" como flag de primera clase es un nice-to-have
+ * para v0.2.0 (requiere migración + cambiar el trigger para que
+ * respete la marca). En el MVP alcanza con la convención: si está
+ * en la fecha/hora del patrón, gana el del patrón; si no, es del
+ * usuario. Doc del gap en `07-progreso-implementacion.md` §6.3.
  *
  * **Sobre `fecha_inicio`:** la DB lo guarda como timestamptz UTC.
  * El form lo arma con `new Date(año, mes, dia, hora, 0)` en hora
@@ -117,7 +132,6 @@ export async function crearServicioExcepcional(
         fecha_inicio: input.fechaInicio,
         lugar: input.lugar?.trim() || null,
         descripcion: input.descripcion?.trim() || null,
-        patron_id: null,
       })
       .select('id, titulo, fecha_inicio')
       .single();

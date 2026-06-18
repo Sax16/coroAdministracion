@@ -35,7 +35,7 @@ solo la capa de presentación. **Cerrados en esta sesión (2026-06-17)**:
 |---|---|---|
 | **RF-011** Editar grupo | `81ff975` | ✅ Implementado: `app/(app)/grupos/[id]/editar.tsx` + `editarGrupo()` en API + `useEditarGrupo()` en hooks. UPDATE directo a `public.grupos` filtrado por RLS admin. El home del grupo re-fetchea con `useFocusEffect` al volver del editor (sin flash) y sincroniza `grupoActivoStore` si cambió el nombre |
 | **RF-042** Excluir servicio puntual | `b40e987` | ✅ Implementado: `src/features/servicios/api.ts` (nueva feature) con `cancelarServicio()` + `useCancelarServicio()`. UI inline en `app/(app)/grupos/[id]/asignaciones/[servicioId].tsx` con zona peligrosa de admin. Badge "Cancelado" + tachado en el header. NO se borran asignaciones (quedan en historial). Push de cancelación queda como gap de RF-062 (v0.2.0) |
-| **RF-043** Crear servicio excepcional | `08ba294` | ✅ Implementado: `crearServicioExcepcional()` en la misma feature `servicios/`. Pantalla `app/(app)/grupos/[id]/servicios/nuevo.tsx` con form (título, fecha DD/MM/AAAA, hora HH:MM, lugar, descripción). INSERT con `patron_id = NULL` para que el trigger del patrón NO lo regenere. Inputs manuales (sin `expo-date-time-picker`) para no sumar deps en el MVP |
+| **RF-043** Crear servicio excepcional | `08ba294` | ✅ Implementado: `crearServicioExcepcional()` en la misma feature `servicios/`. Pantalla `app/(app)/grupos/[id]/servicios/nuevo.tsx` con form (título, fecha DD/MM/AAAA, hora HH:MM, lugar, descripción). INSERT directo a `public.servicios`. Inputs manuales (sin `expo-date-time-picker`) para no sumar deps en el MVP. **Decisión de scope:** la DB no modela la distinción "excepcional vs del patrón" (no hay `patron_id` en `servicios`); el UNIQUE(grupo_id, fecha_inicio) + el `ON CONFLICT DO NOTHING` del trigger hacen que el excepcional no sea pisado si cae en una fecha/hora del patrón. Marcarlo de primera clase queda para v0.2.0 |
 
 Los 3 RFs **corrigieron** el claim que se mantuvo en sesiones previas
 ("todo el MUST del MVP está hecho"). Con estos commits, la app
@@ -71,7 +71,7 @@ cada uno.
 | **Editar perfil (RF-005)** | ✅ Implementado | Edición de nombre y apellido desde `/(app)/perfil/editar`. Update directo a `public.perfiles` filtrado por RLS (policy "perfiles: actualizar el propio"). `useFocusEffect` en el screen padre para re-fetchar silenciosamente al volver del editor (sin flash de spinner). Foto y teléfono quedan para v0.2.0 (requieren Storage + image picker) |
 | **Editar grupo (RF-011)** | ✅ Implementado | `app/(app)/grupos/[id]/editar.tsx` con form nombre + descripción. `editarGrupo()` en `src/features/grupos/api.ts` (UPDATE filtrado por RLS admin) + `useEditarGrupo()`. Home del grupo re-fetchea con `useFocusEffect` al volver y sincroniza `grupoActivoStore` si cambió el nombre |
 | **Excluir servicio puntual (RF-042)** | ✅ Implementado | Nueva feature `src/features/servicios/` con `cancelarServicio()` (UPDATE filtrado por RLS admin) + `useCancelarServicio()`. UI inline en `asignaciones/[servicioId].tsx` con zona peligrosa de admin + badge "Cancelado" + header tachado. NO borra asignaciones. **Gap residual:** push de "servicio cancelado" (parte de RF-062) no se dispara — v0.2.0 |
-| **Crear servicio excepcional (RF-043)** | ✅ Implementado | `crearServicioExcepcional()` en `src/features/servicios/api.ts` (INSERT con `patron_id = NULL`, RLS admin). Pantalla `app/(app)/grupos/[id]/servicios/nuevo.tsx` con form (título, fecha DD/MM/AAAA, hora HH:MM, lugar, descripción). Validación cliente completa (rangos, formatos, no en pasado). **Gap residual:** push de "servicio creado" (parte de RF-060) no se dispara — v0.2.0 |
+| **Crear servicio excepcional (RF-043)** | ✅ Implementado | `crearServicioExcepcional()` en `src/features/servicios/api.ts` (INSERT directo a `public.servicios`, RLS admin). Pantalla `app/(app)/grupos/[id]/servicios/nuevo.tsx` con form (título, fecha DD/MM/AAAA, hora HH:MM, lugar, descripción). Validación cliente completa (rangos, formatos, no en pasado). **Gap residual:** push de "servicio creado" (parte de RF-060) no se dispara — v0.2.0 |
 | **Smoke test prep (v0.1.0)** | ✅ Validación estática completa | `expo-doctor` 21/21, `expo export --platform all` compila los 3 bundles (iOS 4.7MB, Android 4.9MB, Web 1.8MB), typecheck + lint limpios. Fixes de peer deps aplicadas (commit `b9d1a96`). Plan de smoke test ejecutable en [`08-smoke-test.md`](./08-smoke-test.md) |
 | Routing Expo | ✅ Estructura | Grupos `(auth)` y `(app)` con guards de redirección |
 
@@ -119,7 +119,7 @@ cada uno.
 | **Editar perfil (RF-005)** | ✅ Implementado | Edición de nombre y apellido desde `/(app)/perfil/editar`. Update directo a `public.perfiles` filtrado por RLS (policy "perfiles: actualizar el propio"). `useFocusEffect` en el screen padre para re-fetchar silenciosamente al volver del editor (sin flash de spinner). Foto y teléfono quedan para v0.2.0 (requieren Storage + image picker) |
 | **Editar grupo (RF-011)** | ✅ Implementado | `app/(app)/grupos/[id]/editar.tsx` con form nombre + descripción. `editarGrupo()` en `src/features/grupos/api.ts` (UPDATE filtrado por RLS admin) + `useEditarGrupo()`. Home del grupo re-fetchea con `useFocusEffect` al volver y sincroniza `grupoActivoStore` si cambió el nombre |
 | **Excluir servicio puntual (RF-042)** | ✅ Implementado | Nueva feature `src/features/servicios/` con `cancelarServicio()` (UPDATE filtrado por RLS admin) + `useCancelarServicio()`. UI inline en `asignaciones/[servicioId].tsx` con zona peligrosa de admin + badge "Cancelado" + header tachado. NO borra asignaciones. **Gap residual:** push de "servicio cancelado" (parte de RF-062) no se dispara — v0.2.0 |
-| **Crear servicio excepcional (RF-043)** | ✅ Implementado | `crearServicioExcepcional()` en `src/features/servicios/api.ts` (INSERT con `patron_id = NULL`, RLS admin). Pantalla `app/(app)/grupos/[id]/servicios/nuevo.tsx` con form (título, fecha DD/MM/AAAA, hora HH:MM, lugar, descripción). Validación cliente completa (rangos, formatos, no en pasado). **Gap residual:** push de "servicio creado" (parte de RF-060) no se dispara — v0.2.0 |
+| **Crear servicio excepcional (RF-043)** | ✅ Implementado | `crearServicioExcepcional()` en `src/features/servicios/api.ts` (INSERT directo a `public.servicios`, RLS admin). Pantalla `app/(app)/grupos/[id]/servicios/nuevo.tsx` con form (título, fecha DD/MM/AAAA, hora HH:MM, lugar, descripción). Validación cliente completa (rangos, formatos, no en pasado). **Gap residual:** push de "servicio creado" (parte de RF-060) no se dispara — v0.2.0 |
 | **Smoke test prep (v0.1.0)** | ✅ Validación estática completa | `expo-doctor` 21/21, `expo export --platform all` compila los 3 bundles (iOS 4.7MB, Android 4.9MB, Web 1.8MB), typecheck + lint limpios. Fixes de peer deps aplicadas (commit `b9d1a96`). Plan de smoke test ejecutable en [`08-smoke-test.md`](./08-smoke-test.md) |
 | Routing Expo | ✅ Estructura | Grupos `(auth)` y `(app)` con guards de redirección |
 
@@ -435,9 +435,13 @@ servicio queda cancelado en DB, lo único que falta es el push.
 ### 6.3 RF-043 — Crear servicio excepcional (commit `08ba294`)
 
 - `src/features/servicios/api.ts` → `crearServicioExcepcional({ grupoId, titulo,
-  fechaInicio, lugar, descripcion })`: INSERT directo a `public.servicios`
-  con `patron_id = NULL` (marca de "excepcional" — el trigger del patrón NO
-  lo regenera). RLS "servicios: insertar solo admin" valida el caller.
+  fechaInicio, lugar, descripcion })`: INSERT directo a `public.servicios`.
+  RLS "servicios: insertar solo admin" valida el caller. **Decisión de scope:**
+  la DB no modela la distinción "excepcional vs del patrón" (no hay columna
+  `patron_id` en `servicios`); el `UNIQUE(grupo_id, fecha_inicio)` + el
+  `ON CONFLICT DO NOTHING` del trigger hacen que el excepcional no sea pisado
+  si cae en una fecha/hora del patrón. Marcarlo como flag de primera clase
+  queda para v0.2.0 (requiere migración).
 - `app/(app)/grupos/[id]/servicios/nuevo.tsx`: form con título, fecha
   (DD/MM/AAAA), hora (HH:MM), lugar opcional, descripción opcional.
   Inputs manuales con `inputMode="numeric"` (no usamos
