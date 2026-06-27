@@ -11,8 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { LabeledInput } from '@/components/LabeledInput';
-import { useEditarGrupo } from '@/features/grupos/hooks';
-import { listarMisGrupos } from '@/features/grupos/api';
+import { useEditarGrupo, useMisGrupos } from '@/features/grupos/hooks';
 
 /**
  * Pantalla "Editar grupo" (RF-011).
@@ -36,50 +35,37 @@ export default function EditarGrupoScreen() {
   const router = useRouter();
   const { id: grupoId } = useLocalSearchParams<{ id: string }>();
 
-  const { editar, loading, error, clearError } = useEditarGrupo();
+  const editarGrupo = useEditarGrupo();
+  const { data: misGrupos } = useMisGrupos();
 
   const [nombre, setNombre] = useState('');
   const [descripcion, setDescripcion] = useState('');
   const [hydrated, setHydrated] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Carga inicial: trae los valores actuales del grupo para pre-popular.
+  // Pre-popular el form desde el grupo cacheado, una sola vez.
   useEffect(() => {
-    if (!grupoId) return;
-    let cancelado = false;
-    (async () => {
-      const r = await listarMisGrupos();
-      if (cancelado) return;
-      if (!r.ok) {
-        setLoadError(r.error);
-        setHydrated(true);
-        return;
-      }
-      const g = r.data.find((x) => x.id === grupoId);
-      if (g) {
-        setNombre(g.nombre);
-        setDescripcion(g.descripcion ?? '');
-      } else {
-        setLoadError('No se encontró el grupo');
-      }
-      setHydrated(true);
-    })();
-    return () => {
-      cancelado = true;
-    };
-  }, [grupoId]);
+    if (hydrated || !misGrupos) return;
+    const g = misGrupos.find((x) => x.id === grupoId);
+    if (g) {
+      setNombre(g.nombre);
+      setDescripcion(g.descripcion ?? '');
+    }
+    setHydrated(true);
+  }, [misGrupos, grupoId, hydrated]);
 
   const canSubmit = nombre.trim().length >= 2 && nombre.trim().length <= 80;
 
   const onSubmit = async () => {
     if (!canSubmit || !grupoId) return;
-    const result = await editar({
-      id: grupoId,
-      nombre: nombre.trim(),
-      descripcion: descripcion.trim() || null,
-    });
-    if (result) {
+    try {
+      await editarGrupo.mutateAsync({
+        id: grupoId,
+        nombre: nombre.trim(),
+        descripcion: descripcion.trim() || null,
+      });
       router.back();
+    } catch {
+      // Error mostrado vía editarGrupo.error.
     }
   };
 
@@ -110,23 +96,17 @@ export default function EditarGrupoScreen() {
             </Text>
           </View>
 
-          {loadError ? (
-            <View className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3">
-              <Text className="text-sm text-red-700">{loadError}</Text>
-            </View>
-          ) : null}
-
           <LabeledInput
             label="Nombre del grupo"
             value={nombre}
             onChangeText={(t) => {
-              clearError();
+              editarGrupo.reset();
               setNombre(t);
             }}
             placeholder="Ej. Coro Renacer"
             autoCapitalize="words"
             maxLength={80}
-            editable={!loading && hydrated}
+            editable={!editarGrupo.isPending && hydrated}
           />
 
           <LabeledInput
@@ -137,17 +117,17 @@ export default function EditarGrupoScreen() {
             multiline
             numberOfLines={3}
             maxLength={200}
-            editable={!loading && hydrated}
+            editable={!editarGrupo.isPending && hydrated}
           />
 
-          {error ? (
-            <Text className="mb-3 text-sm text-red-600">{error}</Text>
+          {editarGrupo.error ? (
+            <Text className="mb-3 text-sm text-red-600">{editarGrupo.error.message}</Text>
           ) : null}
 
           <Button
             title="Guardar cambios"
             onPress={onSubmit}
-            loading={loading}
+            loading={editarGrupo.isPending}
             disabled={!canSubmit || !hydrated}
           />
 

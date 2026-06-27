@@ -3,7 +3,7 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { unwrap } from '@/lib/query';
 import { qk } from '@/lib/queryKeys';
@@ -36,25 +36,14 @@ export function useMisGrupos() {
 }
 
 /**
- * Hook para crear un grupo nuevo.
+ * Mutación: crear un grupo nuevo. Invalida la lista al terminar.
  */
 export function useCrearGrupo() {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const crear = useCallback(async (input: CrearGrupoInput) => {
-    setLoading(true);
-    setError(null);
-    const result = await apiCrearGrupo(input);
-    setLoading(false);
-    if (!result.ok) {
-      setError(result.error);
-      return null;
-    }
-    return result.data;
-  }, []);
-
-  return { crear, loading, error, clearError: () => setError(null) };
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CrearGrupoInput) => apiCrearGrupo(input).then(unwrap),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.grupos() }),
+  });
 }
 
 /**
@@ -132,36 +121,16 @@ export function useAccionesGrupo() {
 // =============================================================================
 
 /**
- * Hook para editar nombre y descripción de un grupo (RF-011).
- *
- * Devuelve el row actualizado (incluyendo `id`, `nombre`, `descripcion`)
- * para que la pantalla pueda navegar atrás y el padre re-fetchee con
- * los datos nuevos. Mismo patrón que `useActualizarPerfil`.
+ * Mutación: editar nombre/descripción de un grupo (RF-011). Invalida la
+ * lista al terminar.
  */
 export function useEditarGrupo() {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const editar = useCallback(
-    async (input: {
-      id: string;
-      nombre: string;
-      descripcion: string | null;
-    }): Promise<{ id: string; nombre: string; descripcion: string | null } | null> => {
-      setLoading(true);
-      setError(null);
-      const r = await apiEditarGrupo(input);
-      setLoading(false);
-      if (!r.ok) {
-        setError(r.error);
-        return null;
-      }
-      return r.data;
-    },
-    [],
-  );
-
-  return { editar, loading, error, clearError: () => setError(null) };
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: string; nombre: string; descripcion: string | null }) =>
+      apiEditarGrupo(input).then(unwrap),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.grupos() }),
+  });
 }
 
 /**

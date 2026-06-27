@@ -4,8 +4,7 @@ import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-na
 
 import { Button } from '@/components/Button';
 import { LabeledInput } from '@/components/LabeledInput';
-import { useCrearGrupo } from '@/features/grupos/hooks';
-import { useGrupoActivo } from '@/features/grupos/hooks';
+import { useCrearGrupo, useGrupoActivo } from '@/features/grupos/hooks';
 
 /**
  * Pantalla "Crear grupo".
@@ -18,7 +17,7 @@ import { useGrupoActivo } from '@/features/grupos/hooks';
  */
 export default function CrearGrupoScreen() {
   const router = useRouter();
-  const { crear, loading, error, clearError } = useCrearGrupo();
+  const crearGrupo = useCrearGrupo();
   const { seleccionar } = useGrupoActivo();
 
   const [nombre, setNombre] = useState('');
@@ -28,18 +27,15 @@ export default function CrearGrupoScreen() {
 
   const onSubmit = async () => {
     if (!canSubmit) return;
-    const result = await crear({
-      nombre,
-      descripcion: descripcion || undefined,
-    });
-    if (result) {
-      // Seleccionarlo como grupo activo y volver al listado.
-      seleccionar({
-        id: result.id,
-        nombre: nombre.trim(),
-        rol: 'admin',
+    try {
+      const data = await crearGrupo.mutateAsync({
+        nombre,
+        descripcion: descripcion || undefined,
       });
+      seleccionar({ id: data.id, nombre: nombre.trim(), rol: 'admin' });
       router.replace('/(app)/grupos');
+    } catch {
+      // El error se muestra vía crearGrupo.error (abajo).
     }
   };
 
@@ -64,7 +60,7 @@ export default function CrearGrupoScreen() {
           label="Nombre del grupo"
           value={nombre}
           onChangeText={(t) => {
-            clearError();
+            crearGrupo.reset();
             setNombre(t);
           }}
           placeholder="Ej. Coro Renacer, Alabanza Central…"
@@ -82,14 +78,14 @@ export default function CrearGrupoScreen() {
           maxLength={200}
         />
 
-        {error ? (
-          <Text className="mb-3 text-sm text-red-600">{error}</Text>
+        {crearGrupo.error ? (
+          <Text className="mb-3 text-sm text-red-600">{crearGrupo.error.message}</Text>
         ) : null}
 
         <Button
           title="Crear grupo"
           onPress={onSubmit}
-          loading={loading}
+          loading={crearGrupo.isPending}
           disabled={!canSubmit}
         />
 
