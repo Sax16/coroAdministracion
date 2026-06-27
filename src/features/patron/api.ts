@@ -9,21 +9,17 @@
  * lee y escribe el jsonb + metadatos.
  */
 import { supabase } from '@/lib/supabase';
+import { Result } from '@/lib/result';
+import { mapErr, mapSupabaseError } from '@/lib/errores';
+import { Json } from '@/types/database.types';
 
 import { PatronCompleto, PatronConfig } from './types';
-
-export type Result<T> = { ok: true; data: T } | { ok: false; error: string };
 
 interface PatronRow {
   grupo_id: string;
   configuracion: PatronConfig;
   offset_alarma_min: number;
   semanas_generadas: number;
-}
-
-function mapErr(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return String(e);
 }
 
 /**
@@ -41,7 +37,7 @@ export async function obtenerPatron(
       .eq('grupo_id', grupoId)
       .maybeSingle<PatronRow>();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     if (!data) return { ok: true, data: null };
 
     return { ok: true, data };
@@ -78,7 +74,7 @@ export async function guardarPatron(input: {
       .upsert(
         {
           grupo_id: input.grupo_id,
-          configuracion: input.configuracion,
+          configuracion: input.configuracion as unknown as Json,
           offset_alarma_min: input.offset_alarma_min,
           semanas_generadas: input.semanas_generadas,
         },
@@ -87,7 +83,7 @@ export async function guardarPatron(input: {
       .select('grupo_id')
       .single();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     if (!data) return { ok: false, error: 'La DB no devolvió el grupo_id' };
 
     return { ok: true, data: { grupo_id: data.grupo_id } };

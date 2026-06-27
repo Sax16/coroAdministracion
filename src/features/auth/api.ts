@@ -7,32 +7,18 @@
  * - Aísla el resto de la app de la SDK de Supabase (fácil de mockear
  *   en tests, fácil de cambiar de provider).
  */
-import { AuthError, AuthResponse } from '@supabase/supabase-js';
+import { AuthResponse } from '@supabase/supabase-js';
 
 import { supabase } from '@/lib/supabase';
+import { mapSupabaseError } from '@/lib/errores';
 
 export type AuthResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: string };
 
-function mapError(err: AuthError | null | undefined): string {
-  if (!err) return 'Error desconocido';
-  // Mensajes en español para el usuario final.
-  switch (err.message) {
-    case 'Invalid login credentials':
-      return 'Email o contraseña incorrectos';
-    case 'User already registered':
-      return 'Ya existe una cuenta con este email';
-    case 'Password should be at least 6 characters':
-      return 'La contraseña debe tener al menos 6 caracteres';
-    default:
-      return err.message;
-  }
-}
-
 function mapResponse<T>(response: AuthResponse): AuthResult<T> {
   if (response.error) {
-    return { ok: false, error: mapError(response.error) };
+    return { ok: false, error: mapSupabaseError(response.error) };
   }
   if (!response.data) {
     return { ok: false, error: 'Sin datos en la respuesta' };
@@ -90,7 +76,7 @@ export async function resetPassword(email: string) {
     email.trim().toLowerCase(),
   );
   if (response.error) {
-    return { ok: false as const, error: mapError(response.error) };
+    return { ok: false as const, error: mapSupabaseError(response.error) };
   }
   return { ok: true as const, data: null };
 }
@@ -140,7 +126,7 @@ export async function actualizarPerfil(
     .maybeSingle();
 
   if (error) {
-    return { ok: false, error: error.message };
+    return { ok: false, error: mapSupabaseError(error) };
   }
   if (!data) {
     return { ok: false, error: 'No se pudo actualizar el perfil' };
@@ -171,7 +157,7 @@ export async function actualizarPerfil(
 export async function eliminarCuenta(): Promise<AuthResult<null>> {
   const { error } = await supabase.rpc('eliminar_cuenta');
   if (error) {
-    return { ok: false, error: error.message };
+    return { ok: false, error: mapSupabaseError(error) };
   }
   return { ok: true, data: null };
 }

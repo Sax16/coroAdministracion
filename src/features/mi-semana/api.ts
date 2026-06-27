@@ -16,6 +16,7 @@
  */
 import { supabase } from '@/lib/supabase';
 import { Result } from '@/lib/result';
+import { mapErr, mapSupabaseError } from '@/lib/errores';
 import { RolServicio } from '@/features/asignaciones/types';
 
 import { MiServicio } from './types';
@@ -33,11 +34,6 @@ interface ServicioRow {
     rol_servicio: RolServicio;
     usuario_grupo_id: string;
   }>;
-}
-
-function mapErr(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return String(e);
 }
 
 /**
@@ -83,7 +79,7 @@ export async function listarMisServiciosEnRango(input: {
       .order('fecha_inicio', { ascending: true })
       .returns<ServicioRow[]>();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     if (!data) return { ok: true, data: [] };
 
     const out: MiServicio[] = data.map((s) => ({

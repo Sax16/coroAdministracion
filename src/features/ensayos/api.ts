@@ -10,6 +10,8 @@
  */
 import { supabase } from '@/lib/supabase';
 import { Result } from '@/lib/result';
+import { mapErr, mapSupabaseError } from '@/lib/errores';
+import { TablesUpdate } from '@/types/database.types';
 
 import {
   CrearEnsayoInput,
@@ -19,11 +21,6 @@ import {
   EstadoEnsayo,
   InvitadoEnsayoDetallado,
 } from './types';
-
-function mapErr(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return String(e);
-}
 
 // =============================================================================
 // Listados
@@ -87,7 +84,7 @@ export async function listarEnsayosProximos(
       .order('fecha_inicio', { ascending: true })
       .returns<EnsayoRow[]>();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
 
     return { ok: true, data: (data ?? []).map(rowToEnsayo) };
   } catch (e) {
@@ -120,7 +117,7 @@ export async function listarEnsayosPasados(
       .limit(limite)
       .returns<EnsayoRow[]>();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
 
     return { ok: true, data: (data ?? []).map(rowToEnsayo) };
   } catch (e) {
@@ -144,7 +141,7 @@ export async function obtenerEnsayo(ensayoId: string): Promise<Result<EnsayoConE
       .eq('id', ensayoId)
       .maybeSingle<EnsayoRow>();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     if (!data) return { ok: false, error: 'Ensayo no encontrado' };
 
     return { ok: true, data: rowToEnsayo(data) };
@@ -209,7 +206,7 @@ export async function crearEnsayo(
       .select('id')
       .single();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     return { ok: true, data: { id: data.id } };
   } catch (e) {
     return { ok: false, error: mapErr(e) };
@@ -222,7 +219,7 @@ export async function editarEnsayo(
   cambios: EditarEnsayoInput,
 ): Promise<Result<{ id: string }>> {
   try {
-    const patch: Record<string, unknown> = {};
+    const patch: TablesUpdate<'ensayos'> = {};
     if (cambios.titulo !== undefined) patch.titulo = cambios.titulo.trim();
     if (cambios.fecha_inicio !== undefined) patch.fecha_inicio = cambios.fecha_inicio;
     if (cambios.fecha_fin !== undefined) patch.fecha_fin = cambios.fecha_fin;
@@ -243,7 +240,7 @@ export async function editarEnsayo(
       .select('id')
       .single();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     return { ok: true, data: { id: data.id } };
   } catch (e) {
     return { ok: false, error: mapErr(e) };
@@ -264,7 +261,7 @@ export async function cancelarEnsayo(ensayoId: string): Promise<Result<{ id: str
       .select('id')
       .single();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     return { ok: true, data: { id: data.id } };
   } catch (e) {
     return { ok: false, error: mapErr(e) };
@@ -285,7 +282,7 @@ export async function reabrirEnsayo(ensayoId: string): Promise<Result<{ id: stri
       .select('id')
       .single();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     return { ok: true, data: { id: data.id } };
   } catch (e) {
     return { ok: false, error: mapErr(e) };
@@ -343,7 +340,7 @@ export async function listarInvitados(
       .eq('ensayo_id', ensayoId)
       .returns<InvitadoRow[]>();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
 
     const out: InvitadoEnsayoDetallado[] = (data ?? [])
       .filter((row) => row.usuario_grupos?.perfiles)
@@ -386,7 +383,7 @@ export async function invitarMiembro(
       if (error.code === '23505') {
         return { ok: false, error: 'Este miembro ya está invitado' };
       }
-      return { ok: false, error: error.message };
+      return { ok: false, error: mapSupabaseError(error) };
     }
     return { ok: true, data: { id: data.id } };
   } catch (e) {
@@ -407,7 +404,7 @@ export async function quitarInvitado(
       .eq('usuario_grupo_id', usuarioGrupoId)
       .select('id');
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     return { ok: true, data: { count: data?.length ?? 0 } };
   } catch (e) {
     return { ok: false, error: mapErr(e) };
@@ -460,7 +457,7 @@ export async function listarMisEnsayosEnRango(input: {
       .order('fecha_inicio', { ascending: true })
       .returns<MiEnsayoRow[]>();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     if (!data) return { ok: true, data: [] };
 
     // Strip the JOIN column before returning (consumers don't need it)

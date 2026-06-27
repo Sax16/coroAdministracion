@@ -18,6 +18,8 @@
  *   de asistencia (RF-090+).
  */
 import { supabase } from '@/lib/supabase';
+import { Result } from '@/lib/result';
+import { mapErr, mapSupabaseError } from '@/lib/errores';
 
 import {
   AsignacionDetallada,
@@ -25,13 +27,6 @@ import {
   RolServicio,
   ServicioConAsignaciones,
 } from './types';
-
-export type Result<T> = { ok: true; data: T } | { ok: false; error: string };
-
-function mapErr(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return String(e);
-}
 
 // =============================================================================
 // Servicios de la semana
@@ -46,20 +41,23 @@ interface ServicioRow {
   estado: 'programado' | 'cancelado' | 'realizado';
 }
 
-interface AsignacionJoinRow {
+interface AsignacionRow {
   id: string;
   servicio_id: string;
   usuario_grupo_id: string;
   rol_servicio: RolServicio;
   created_at: string;
-  usuario_grupos: {
-    id: string;
-    usuario_id: string;
-    perfiles: {
-      nombre: string;
-      apellido: string;
-    } | null;
-  } | null;
+}
+
+interface UsuarioGrupoRow {
+  id: string;
+  usuario_id: string;
+}
+
+interface PerfilRow {
+  id: string;
+  nombre: string;
+  apellido: string;
 }
 
 /**
@@ -67,6 +65,13 @@ interface AsignacionJoinRow {
  * con sus asignaciones mergeadas (cada servicio incluye la lista de
  * asignaciones con datos del miembro). Solo servicios NO cancelados
  * (los cancelados se listan aparte, tachados — ver TODO en pantalla).
+ *
+ * Implementación: 3 queries separadas en lugar de un JOIN embebido.
+ * Esto es más robusto porque NO depende del schema cache de PostgREST
+ * para reconocer foreign keys embebidas — vimos que ese cache puede
+ * quedar stale y romper el embed con "Could not find a relationship".
+ * Tradeoff: 3 round-trips a Supabase en vez de 1, pero el volumen de
+ * datos de la vista semanal es chico (decenas de servicios, no miles).
  *
  * El parámetro `lunesISO` es el inicio de la semana (lunes 00:00 local
  * convertido a ISO). El fin es lunes+7d, exclusivo.
@@ -87,49 +92,74 @@ export async function listarServiciosSemana(
       .order('fecha_inicio', { ascending: true })
       .returns<ServicioRow[]>();
 
-    if (errServ) return { ok: false, error: errServ.message };
+    if (errServ) return { ok: false, error: mapSupabaseError(errServ) };
     if (!servicios || servicios.length === 0) {
       return { ok: true, data: [] };
     }
 
-    // 2. Asignaciones de esos servicios, con JOIN a perfil del miembro
     const servicioIds = servicios.map((s) => s.id);
+
+    // 2. Asignaciones de esos servicios (sin JOIN — los mergeamos en JS)
     const { data: asigs, error: errAsig } = await supabase
       .from('asignaciones_servicio')
-      .select(
-        `
-        id,
-        servicio_id,
-        usuario_grupo_id,
-        rol_servicio,
-        created_at,
-        usuario_grupos!asignaciones_servicio_usuario_grupo_id_fkey (
-          id,
-          usuario_id,
-          perfiles!usuarios_grupos_usuario_id_fkey (
-            nombre,
-            apellido
-          )
-        )
-      `,
-      )
+      .select('id, servicio_id, usuario_grupo_id, rol_servicio, created_at')
       .in('servicio_id', servicioIds)
-      .returns<AsignacionJoinRow[]>();
+      .returns<AsignacionRow[]>();
 
-    if (errAsig) return { ok: false, error: errAsig.message };
+    if (errAsig) return { ok: false, error: mapSupabaseError(errAsig) };
 
-    // 3. Merge en JS: agrupar asignaciones por servicio_id
+    // Si no hay asignaciones, devolvemos servicios con lista vacía
+    if (!asigs || asigs.length === 0) {
+      const out: ServicioConAsignaciones[] = servicios.map((s) => ({
+        id: s.id,
+        fecha_inicio: s.fecha_inicio,
+        titulo: s.titulo,
+        tipo: s.tipo,
+        estado: s.estado,
+        asignaciones: [],
+      }));
+      return { ok: true, data: out };
+    }
+
+    // 3. Lookup de usuarios_grupos (los que aparecen en las asignaciones)
+    const ugIds = Array.from(new Set(asigs.map((a) => a.usuario_grupo_id)));
+    const { data: ugs, error: errUg } = await supabase
+      .from('usuarios_grupos')
+      .select('id, usuario_id')
+      .in('id', ugIds)
+      .returns<UsuarioGrupoRow[]>();
+
+    if (errUg) return { ok: false, error: mapSupabaseError(errUg) };
+    const ugMap = new Map<string, UsuarioGrupoRow>();
+    for (const ug of ugs ?? []) ugMap.set(ug.id, ug);
+
+    // 4. Lookup de perfiles (los usuarios detrás de los usuarios_grupos)
+    const usuarioIds = Array.from(
+      new Set((ugs ?? []).map((ug) => ug.usuario_id)),
+    );
+    const { data: perfiles, error: errPer } = await supabase
+      .from('perfiles')
+      .select('id, nombre, apellido')
+      .in('id', usuarioIds)
+      .returns<PerfilRow[]>();
+
+    if (errPer) return { ok: false, error: mapSupabaseError(errPer) };
+    const perfilMap = new Map<string, PerfilRow>();
+    for (const p of perfiles ?? []) perfilMap.set(p.id, p);
+
+    // 5. Merge en JS: agrupar asignaciones por servicio_id con datos del miembro
     const asigsPorServicio = new Map<string, AsignacionDetallada[]>();
-    for (const row of asigs ?? []) {
-      const ug = row.usuario_grupos;
-      const perfil = ug?.perfiles;
-      if (!ug || !perfil) continue; // defensa: si el JOIN falló, lo salteamos
+    for (const a of asigs) {
+      const ug = ugMap.get(a.usuario_grupo_id);
+      if (!ug) continue;
+      const perfil = perfilMap.get(ug.usuario_id);
+      if (!perfil) continue; // defensa: si el perfil fue borrado, lo salteamos
       const detallada: AsignacionDetallada = {
-        id: row.id,
-        servicio_id: row.servicio_id,
-        usuario_grupo_id: row.usuario_grupo_id,
-        rol_servicio: row.rol_servicio,
-        created_at: row.created_at,
+        id: a.id,
+        servicio_id: a.servicio_id,
+        usuario_grupo_id: a.usuario_grupo_id,
+        rol_servicio: a.rol_servicio,
+        created_at: a.created_at,
         miembro: {
           usuario_grupo_id: ug.id,
           usuario_id: ug.usuario_id,
@@ -137,9 +167,9 @@ export async function listarServiciosSemana(
           apellido: perfil.apellido,
         },
       };
-      const arr = asigsPorServicio.get(row.servicio_id) ?? [];
+      const arr = asigsPorServicio.get(a.servicio_id) ?? [];
       arr.push(detallada);
-      asigsPorServicio.set(row.servicio_id, arr);
+      asigsPorServicio.set(a.servicio_id, arr);
     }
 
     const out: ServicioConAsignaciones[] = servicios.map((s) => ({
@@ -161,51 +191,56 @@ export async function listarServiciosSemana(
 // Miembros del grupo (para el selector de asignación)
 // =============================================================================
 
-interface MiembroJoinRow {
+interface MiembroRow {
   id: string;
   usuario_id: string;
   rol: 'admin' | 'miembro';
   estado: 'activo' | 'inactivo';
-  perfiles: {
-    nombre: string;
-    apellido: string;
-  } | null;
 }
 
 /** Lista los miembros ACTIVOS del grupo (estado='activo'). */
 export async function listarMiembrosActivos(grupoId: string): Promise<Result<MiembroGrupo[]>> {
   try {
-    const { data, error } = await supabase
+    // 1. usuarios_grupos del grupo
+    const { data: miembros, error: errUg } = await supabase
       .from('usuarios_grupos')
-      .select(
-        `
-        id,
-        usuario_id,
-        rol,
-        estado,
-        perfiles!usuarios_grupos_usuario_id_fkey (
-          nombre,
-          apellido
-        )
-      `,
-      )
+      .select('id, usuario_id, rol, estado')
       .eq('grupo_id', grupoId)
       .eq('estado', 'activo')
       .order('rol', { ascending: true }) // admins primero
-      .returns<MiembroJoinRow[]>();
+      .returns<MiembroRow[]>();
 
-    if (error) return { ok: false, error: error.message };
-    if (!data) return { ok: true, data: [] };
+    if (errUg) return { ok: false, error: mapSupabaseError(errUg) };
+    if (!miembros || miembros.length === 0) {
+      return { ok: true, data: [] };
+    }
 
-    const out: MiembroGrupo[] = data
-      .filter((m) => m.perfiles !== null)
-      .map((m) => ({
-        usuario_grupo_id: m.id,
-        usuario_id: m.usuario_id,
-        nombre: m.perfiles!.nombre,
-        apellido: m.perfiles!.apellido,
-        rol: m.rol,
-      }))
+    // 2. perfiles de esos usuarios (sin JOIN embebido — ver listarServiciosSemana)
+    const usuarioIds = Array.from(new Set(miembros.map((m) => m.usuario_id)));
+    const { data: perfiles, error: errPer } = await supabase
+      .from('perfiles')
+      .select('id, nombre, apellido')
+      .in('id', usuarioIds)
+      .returns<PerfilRow[]>();
+
+    if (errPer) return { ok: false, error: mapSupabaseError(errPer) };
+    const perfilMap = new Map<string, PerfilRow>();
+    for (const p of perfiles ?? []) perfilMap.set(p.id, p);
+
+    const out: MiembroGrupo[] = miembros
+      .map((m): MiembroGrupo | null => {
+        const perfil = perfilMap.get(m.usuario_id);
+        if (!perfil) return null;
+        return {
+          usuario_grupo_id: m.id,
+          usuario_id: m.usuario_id,
+          nombre: perfil.nombre,
+          apellido: perfil.apellido,
+          rol: m.rol,
+        };
+      })
+      // Filtrar miembros sin perfil (defensa)
+      .filter((m): m is MiembroGrupo => m !== null)
       // Dentro de cada rol, ordenar alfabéticamente por apellido
       .sort((a, b) => {
         if (a.rol !== b.rol) return a.rol === 'admin' ? -1 : 1;
@@ -252,7 +287,7 @@ export async function crearAsignacion(input: {
       if (error.code === '23505') {
         return { ok: false, error: 'Este miembro ya tiene ese rol asignado' };
       }
-      return { ok: false, error: error.message };
+      return { ok: false, error: mapSupabaseError(error) };
     }
     return { ok: true, data: { id: data.id } };
   } catch (e) {
@@ -279,7 +314,7 @@ export async function crearAsignaciones(
       if (error.code === '23505') {
         return { ok: false, error: 'Una o más asignaciones ya existen' };
       }
-      return { ok: false, error: error.message };
+      return { ok: false, error: mapSupabaseError(error) };
     }
     return { ok: true, data: { count: data?.length ?? 0 } };
   } catch (e) {
@@ -297,7 +332,7 @@ export async function eliminarAsignacion(id: string): Promise<Result<{ id: strin
       .select('id')
       .single();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     return { ok: true, data: { id: data.id } };
   } catch (e) {
     return { ok: false, error: mapErr(e) };
@@ -320,7 +355,7 @@ export async function eliminarAsignacionesDeMiembro(
       .eq('usuario_grupo_id', usuarioGrupoId)
       .select('id');
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     return { ok: true, data: { count: data?.length ?? 0 } };
   } catch (e) {
     return { ok: false, error: mapErr(e) };

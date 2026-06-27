@@ -19,17 +19,13 @@
  */
 import { supabase } from '@/lib/supabase';
 import { Result } from '@/lib/result';
+import { mapErr, mapSupabaseError } from '@/lib/errores';
 
 import {
   CrearSolicitudInput,
   GrupoDescubierto,
   SolicitudDetallada,
 } from './types';
-
-function mapErr(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return String(e);
-}
 
 // =============================================================================
 // Búsqueda de grupos (RF-020)
@@ -68,7 +64,7 @@ export async function buscarGrupos(query: string): Promise<Result<GrupoDescubier
       .limit(20)
       .returns<GrupoRow[]>();
 
-    if (errGrupos) return { ok: false, error: errGrupos.message };
+    if (errGrupos) return { ok: false, error: mapSupabaseError(errGrupos) };
     if (!grupos || grupos.length === 0) {
       return { ok: true, data: [] };
     }
@@ -81,7 +77,7 @@ export async function buscarGrupos(query: string): Promise<Result<GrupoDescubier
       .in('grupo_id', grupoIds)
       .eq('estado', 'activo');
 
-    if (errUg) return { ok: false, error: errUg.message };
+    if (errUg) return { ok: false, error: mapSupabaseError(errUg) };
     const miembrosActivos = new Set((ug ?? []).map((r) => r.grupo_id));
 
     // 3. Traer solicitudes pendientes del usuario actual
@@ -91,7 +87,7 @@ export async function buscarGrupos(query: string): Promise<Result<GrupoDescubier
       .in('grupo_id', grupoIds)
       .eq('estado', 'pendiente');
 
-    if (errSols) return { ok: false, error: errSols.message };
+    if (errSols) return { ok: false, error: mapSupabaseError(errSols) };
     const pendienteSet = new Set((sols ?? []).map((r) => r.grupo_id));
 
     // 4. Combinar
@@ -141,7 +137,7 @@ export async function crearSolicitud(
       if (error.code === '23505') {
         return { ok: false, error: 'Ya tenés una solicitud pendiente para este grupo' };
       }
-      return { ok: false, error: error.message };
+      return { ok: false, error: mapSupabaseError(error) };
     }
     return { ok: true, data: { id: data.id } };
   } catch (e) {
@@ -197,7 +193,7 @@ export async function listarSolicitudesPendientes(
       .order('created_at', { ascending: true })
       .returns<SolicitudRow[]>();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     if (!data) return { ok: true, data: [] };
 
     const out: SolicitudDetallada[] = data
@@ -261,7 +257,7 @@ export async function listarMisSolicitudesPendientes(): Promise<
       .order('created_at', { ascending: false })
       .returns<SolicitudRow[]>();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     if (!data) return { ok: true, data: [] };
 
     const out: SolicitudDetallada[] = data
@@ -314,7 +310,7 @@ export async function obtenerSolicitud(
       .eq('id', solicitudId)
       .maybeSingle<SolicitudRow>();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     if (!data || !data.grupo || !data.solicitante_perfil) {
       return { ok: false, error: 'Solicitud no encontrada' };
     }
@@ -364,7 +360,7 @@ export async function aprobarSolicitud(solicitudId: string): Promise<Result<null
     const { error } = await supabase.rpc('aprobar_solicitud', {
       p_solicitud_id: solicitudId,
     });
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     return { ok: true, data: null };
   } catch (e) {
     return { ok: false, error: mapErr(e) };
@@ -385,7 +381,7 @@ export async function rechazarSolicitud(solicitudId: string): Promise<Result<nul
       })
       .eq('id', solicitudId);
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     return { ok: true, data: null };
   } catch (e) {
     return { ok: false, error: mapErr(e) };

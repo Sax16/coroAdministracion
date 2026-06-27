@@ -12,17 +12,14 @@
  */
 import { supabase } from '@/lib/supabase';
 import { Result } from '@/lib/result';
+import { mapErr, mapSupabaseError } from '@/lib/errores';
+import { TablesUpdate } from '@/types/database.types';
 
 import {
   Comunicado,
   CrearComunicadoInput,
   EditarComunicadoInput,
 } from './types';
-
-function mapErr(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return String(e);
-}
 
 // =============================================================================
 // Listados
@@ -47,7 +44,7 @@ export async function listarComunicados(
       .limit(limite)
       .returns<Comunicado[]>();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     return { ok: true, data: data ?? [] };
   } catch (e) {
     return { ok: false, error: mapErr(e) };
@@ -65,7 +62,7 @@ export async function obtenerComunicado(
       .eq('id', comunicadoId)
       .maybeSingle<Comunicado>();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     if (!data) return { ok: false, error: 'Comunicado no encontrado' };
     return { ok: true, data };
   } catch (e) {
@@ -98,7 +95,7 @@ export async function crearComunicado(
       .select('id')
       .single();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     return { ok: true, data: { id: data.id } };
   } catch (e) {
     return { ok: false, error: mapErr(e) };
@@ -111,7 +108,7 @@ export async function editarComunicado(
   cambios: EditarComunicadoInput,
 ): Promise<Result<{ id: string }>> {
   try {
-    const patch: Record<string, unknown> = {};
+    const patch: TablesUpdate<'comunicados'> = {};
     if (cambios.titulo !== undefined) patch.titulo = cambios.titulo.trim();
     if (cambios.descripcion !== undefined)
       patch.descripcion = cambios.descripcion.trim();
@@ -129,7 +126,7 @@ export async function editarComunicado(
       .select('id')
       .single();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     return { ok: true, data: { id: data.id } };
   } catch (e) {
     return { ok: false, error: mapErr(e) };
@@ -148,7 +145,7 @@ export async function eliminarComunicado(
       .select('id')
       .single();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     return { ok: true, data: { id: data.id } };
   } catch (e) {
     return { ok: false, error: mapErr(e) };

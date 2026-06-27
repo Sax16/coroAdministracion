@@ -18,13 +18,9 @@ import { Platform } from 'react-native';
 
 import { supabase } from '@/lib/supabase';
 import { Result } from '@/lib/result';
+import { mapErr, mapSupabaseError } from '@/lib/errores';
 
 import { Dispositivo, Plataforma } from './types';
-
-function mapErr(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return String(e);
-}
 
 /**
  * Registra (o actualiza) el push token del dispositivo actual.
@@ -62,7 +58,7 @@ export async function registrarDispositivo(input: {
       .select('id')
       .single();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     return { ok: true, data: { id: data.id } };
   } catch (e) {
     return { ok: false, error: mapErr(e) };
@@ -88,7 +84,7 @@ export async function eliminarDispositivoActual(): Promise<Result<{ count: numbe
       .eq('usuario_id', userData.user.id)
       .select('id');
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     return { ok: true, data: { count: data?.length ?? 0 } };
   } catch (e) {
     return { ok: false, error: mapErr(e) };
@@ -106,7 +102,7 @@ export async function eliminarDispositivoPorToken(
       .eq('expo_push_token', expoPushToken)
       .select('id');
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     return { ok: true, data: { count: data?.length ?? 0 } };
   } catch (e) {
     return { ok: false, error: mapErr(e) };
@@ -121,7 +117,7 @@ export async function listarMisDispositivos(): Promise<Result<Dispositivo[]>> {
       .select('*')
       .order('last_seen_at', { ascending: false });
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     return { ok: true, data: (data ?? []) as Dispositivo[] };
   } catch (e) {
     return { ok: false, error: mapErr(e) };

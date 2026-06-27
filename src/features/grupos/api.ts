@@ -6,6 +6,8 @@
  * invocan las SECURITY DEFINER functions de la DB.
  */
 import { supabase } from '@/lib/supabase';
+import { Result } from '@/lib/result';
+import { mapErr, mapSupabaseError } from '@/lib/errores';
 
 export interface Grupo {
   id: string;
@@ -19,13 +21,6 @@ export interface Grupo {
 
 export interface GrupoConRol extends Grupo {
   rol: 'admin' | 'miembro';
-}
-
-export type Result<T> = { ok: true; data: T } | { ok: false; error: string };
-
-function mapErr(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return String(e);
 }
 
 /**
@@ -46,10 +41,10 @@ export async function listarMisGrupos(): Promise<Result<GrupoConRol[]>> {
       )
       .eq('estado', 'activo');
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
 
-    const mapped: GrupoConRol[] = (data ?? []).flatMap((row: any) => {
-      const g = row.grupo;
+    const mapped: GrupoConRol[] = (data ?? []).flatMap((row) => {
+      const g = Array.isArray(row.grupo) ? row.grupo[0] : row.grupo;
       if (!g || g.deleted_at) return [];
       return [
         {
@@ -84,10 +79,10 @@ export async function crearGrupo(input: {
   try {
     const { data, error } = await supabase.rpc('crear_grupo', {
       p_nombre: input.nombre.trim(),
-      p_descripcion: input.descripcion?.trim() || null,
+      p_descripcion: input.descripcion?.trim() || undefined,
     });
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     if (!data) return { ok: false, error: 'La función no devolvió un ID' };
 
     return { ok: true, data: { id: data as string } };
@@ -126,7 +121,7 @@ export async function transferirAdmin(input: {
       p_grupo_id: input.grupoId,
       p_nuevo_admin_usuario_grupo_id: input.nuevoAdminUsuarioGrupoId,
     });
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     return { ok: true, data: null };
   } catch (e) {
     return { ok: false, error: mapErr(e) };
@@ -167,7 +162,7 @@ export async function editarGrupo(input: {
       .select('id, nombre, descripcion')
       .maybeSingle();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     if (!data) return { ok: false, error: 'No se pudo actualizar el grupo' };
 
     return { ok: true, data };
@@ -192,7 +187,7 @@ export async function eliminarGrupo(grupoId: string): Promise<Result<null>> {
     const { error } = await supabase.rpc('eliminar_grupo', {
       p_grupo_id: grupoId,
     });
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     return { ok: true, data: null };
   } catch (e) {
     return { ok: false, error: mapErr(e) };

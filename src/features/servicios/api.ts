@@ -16,13 +16,8 @@
  *   vacíos, para no pisar valores existentes con string vacío.
  */
 import { supabase } from '@/lib/supabase';
-
-export type Result<T> = { ok: true; data: T } | { ok: false; error: string };
-
-function mapErr(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return String(e);
-}
+import { Result } from '@/lib/result';
+import { mapErr, mapSupabaseError } from '@/lib/errores';
 
 export interface ServicioCancelado {
   id: string;
@@ -57,7 +52,7 @@ export async function cancelarServicio(servicioId: string): Promise<Result<Servi
       .select('id, estado')
       .maybeSingle();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     if (!data) return { ok: false, error: 'No se pudo cancelar el servicio' };
     if (data.estado !== 'cancelado') {
       return { ok: false, error: 'La DB no confirmó el estado cancelado' };
@@ -136,7 +131,7 @@ export async function crearServicioExcepcional(
       .select('id, titulo, fecha_inicio')
       .single();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     if (!data) return { ok: false, error: 'La DB no devolvió el servicio creado' };
 
     return { ok: true, data };

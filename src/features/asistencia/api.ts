@@ -13,6 +13,7 @@
  */
 import { supabase } from '@/lib/supabase';
 import { Result } from '@/lib/result';
+import { mapErr, mapSupabaseError } from '@/lib/errores';
 
 import {
   AsignacionConEstado,
@@ -21,9 +22,13 @@ import {
   ResumenCierre,
 } from './types';
 
-function mapErr(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return String(e);
+/**
+ * Normaliza una relación embebida de PostgREST: devuelve el primer elemento
+ * si vino como array (to-many) o el objeto tal cual si vino to-one.
+ */
+function pickOne<T>(rel: unknown): T | null {
+  if (rel == null) return null;
+  return (Array.isArray(rel) ? (rel[0] ?? null) : rel) as T | null;
 }
 
 // =============================================================================
@@ -97,7 +102,7 @@ export async function obtenerResumenCierre(
       .eq('id', servicioId)
       .maybeSingle<ResumenRow>();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     if (!data) return { ok: false, error: 'Servicio no encontrado' };
 
     const asignaciones: AsignacionConEstado[] = (data.asignaciones_servicio ?? [])
@@ -167,7 +172,7 @@ export async function actualizarEstadoAsistencia(input: {
       .select('id')
       .single();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     return { ok: true, data: { id: data.id } };
   } catch (e) {
     return { ok: false, error: mapErr(e) };
@@ -195,7 +200,7 @@ export async function cerrarAsistencia(
       .select('id')
       .single();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     return { ok: true, data: { id: data.id } };
   } catch (e) {
     return { ok: false, error: mapErr(e) };
@@ -214,7 +219,7 @@ export async function reabrirAsistencia(
       .select('id')
       .single();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     return { ok: true, data: { id: data.id } };
   } catch (e) {
     return { ok: false, error: mapErr(e) };
@@ -259,7 +264,7 @@ export async function obtenerMisEstadosEnServicios(input: {
       )
       .in('servicio_id', input.servicioIds);
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     if (!data) return { ok: true, data: new Map() };
 
     const out = new Map<
@@ -272,8 +277,15 @@ export async function obtenerMisEstadosEnServicios(input: {
     >();
 
     for (const row of data) {
-      const estado = row.estados_asistencia_servicio?.[0]?.estado ?? 'asistio';
-      const justif = row.justificaciones_servicio?.[0]?.texto ?? null;
+      // PostgREST devuelve la relación to-one como objeto y la to-many como
+      // array. `pickOne` normaliza ambas formas (antes el `?.[0]` asumía
+      // siempre array, y sobre la relación to-one daba undefined => bug).
+      const estadoRow = pickOne<{ estado: EstadoAsistencia }>(
+        row.estados_asistencia_servicio,
+      );
+      const justifRow = pickOne<{ texto: string }>(row.justificaciones_servicio);
+      const estado = estadoRow?.estado ?? 'asistio';
+      const justif = justifRow?.texto ?? null;
       out.set(row.servicio_id, {
         asignacion_id: row.id,
         estado,
@@ -332,7 +344,7 @@ export async function obtenerMiEstadoEnServicio(
       .eq('servicio_id', servicioId)
       .returns<MiEstadoRow[]>();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: mapSupabaseError(error) };
     if (!data || data.length === 0) {
       return { ok: false, error: 'No estás asignado a este servicio' };
     }
@@ -385,7 +397,7 @@ export async function guardarJustificacion(input: {
       .eq('id', input.servicio_id)
       .maybeSingle();
 
-    if (errSrv) return { ok: false, error: errSrv.message };
+    if (errSrv) return { ok: false, error: mapSupabaseError(errSrv) };
     if (!srv) return { ok: false, error: 'Servicio no encontrado' };
 
     const { data: ug, error: errUg } = await supabase
@@ -396,7 +408,7 @@ export async function guardarJustificacion(input: {
       .eq('estado', 'activo')
       .maybeSingle();
 
-    if (errUg) return { ok: false, error: errUg.message };
+    if (errUg) return { ok: false, error: mapSupabaseError(errUg) };
     if (!ug) return { ok: false, error: 'No sos miembro activo de este grupo' };
 
     // 2. Buscar si ya existe una justificación
@@ -415,7 +427,7 @@ export async function guardarJustificacion(input: {
         .eq('id', existente.id)
         .select('id')
         .single();
-      if (error) return { ok: false, error: error.message };
+      if (error) return { ok: false, error: mapSupabaseError(error) };
       return { ok: true, data: { id: data.id } };
     } else {
       // INSERT
@@ -428,7 +440,7 @@ export async function guardarJustificacion(input: {
         })
         .select('id')
         .single();
-      if (error) return { ok: false, error: error.message };
+      if (error) return { ok: false, error: mapSupabaseError(error) };
       return { ok: true, data: { id: data.id } };
     }
   } catch (e) {
