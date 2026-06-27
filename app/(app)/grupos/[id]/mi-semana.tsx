@@ -1,5 +1,5 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 
-import { GrupoConRol, listarMisGrupos } from '@/features/grupos/api';
+import { useMisGrupos } from '@/features/grupos/hooks';
 import { useAlarmaScheduler, useMiSemana } from '@/features/mi-semana/hooks';
 import { MiEvento, MiEventoEnsayo, MiEventoServicio } from '@/features/mi-semana/types';
 import {
@@ -27,7 +27,6 @@ import {
   getDiasSemana,
   getLunesSemana,
 } from '@/features/asignaciones/types';
-import { useAuthStore } from '@/stores/auth';
 
 /**
  * Pantalla "Mi semana" (RF-054, RF-055, RF-063, RF-064, RF-076).
@@ -50,33 +49,12 @@ import { useAuthStore } from '@/stores/auth';
 export default function MiSemanaScreen() {
   const router = useRouter();
   const { id: grupoId } = useLocalSearchParams<{ id: string }>();
-  const user = useAuthStore((s) => s.user);
-
   const lunes = useMemo(() => getLunesSemana(new Date()), []);
 
-  const [nombreGrupo, setNombreGrupo] = useState<string | null>(null);
-  const [esAdmin, setEsAdmin] = useState(false);
-  const [cargandoGrupo, setCargandoGrupo] = useState(true);
-
-  useEffect(() => {
-    if (!grupoId || !user) return;
-    let cancelado = false;
-    (async () => {
-      const result = await listarMisGrupos();
-      if (cancelado) return;
-      if (result.ok) {
-        const g = (result.data as GrupoConRol[]).find((x) => x.id === grupoId);
-        if (g) {
-          setNombreGrupo(g.nombre);
-          setEsAdmin(g.rol === 'admin');
-        }
-      }
-      setCargandoGrupo(false);
-    })();
-    return () => {
-      cancelado = true;
-    };
-  }, [grupoId, user]);
+  const { data: misGrupos } = useMisGrupos();
+  const grupoActual = misGrupos?.find((g) => g.id === grupoId);
+  const nombreGrupo = grupoActual?.nombre ?? null;
+  const esAdmin = grupoActual?.rol === 'admin';
 
   const { eventos, loading, error, refetch, offsetMinutos } = useMiSemana(
     grupoId ?? '',
@@ -122,7 +100,7 @@ export default function MiSemanaScreen() {
     void refetch();
   }, [refetch]);
 
-  if (cargandoGrupo && loading) {
+  if (!grupoActual && loading) {
     return (
       <View className="flex-1 items-center justify-center bg-slate-50">
         <ActivityIndicator size="large" color="#4f46e5" />

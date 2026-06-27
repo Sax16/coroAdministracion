@@ -11,8 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { useAccionesGrupo } from '@/features/grupos/hooks';
-import { listarMisGrupos } from '@/features/grupos/api';
+import { useAccionesGrupo, useMisGrupos } from '@/features/grupos/hooks';
 import { supabase } from '@/lib/supabase';
 import { useGrupoActivoStore } from '@/stores/grupoActivo';
 
@@ -42,36 +41,18 @@ export default function EliminarGrupoScreen() {
   const grupoActivo = useGrupoActivoStore((s) => s.grupo);
   const setGrupo = useGrupoActivoStore((s) => s.setGrupo);
 
-  const [nombre, setNombre] = useState<string | null>(null);
-  const [descripcion, setDescripcion] = useState<string | null>(null);
+  const { data: misGrupos } = useMisGrupos();
+  const grupoActual = misGrupos?.find((g) => g.id === grupoId);
+  const nombre = grupoActual?.nombre ?? null;
+  const descripcion = grupoActual?.descripcion ?? null;
+
   const [miembrosCount, setMiembrosCount] = useState<number | null>(null);
   const [loadingInfo, setLoadingInfo] = useState(true);
   const [confirmText, setConfirmText] = useState('');
 
   const puedeConfirmar = confirmText.trim().toUpperCase() === 'ELIMINAR';
 
-  useEffect(() => {
-    if (!grupoId) return;
-    let cancelado = false;
-    (async () => {
-      const r = await listarMisGrupos();
-      if (cancelado) return;
-      if (r.ok) {
-        const g = r.data.find((x) => x.id === grupoId);
-        if (g) {
-          setNombre(g.nombre);
-          setDescripcion(g.descripcion);
-        }
-      }
-      setLoadingInfo(false);
-    })();
-    return () => {
-      cancelado = true;
-    };
-  }, [grupoId]);
-
   // Traemos el count de miembros activos para mostrarlo en el resumen.
-  // Lo hacemos en un effect aparte para no bloquear el nombre/desc.
   useEffect(() => {
     if (!grupoId) return;
     let cancelado = false;
@@ -81,7 +62,10 @@ export default function EliminarGrupoScreen() {
         .select('id', { count: 'exact', head: true })
         .eq('grupo_id', grupoId)
         .eq('estado', 'activo');
-      if (!cancelado) setMiembrosCount(count ?? 0);
+      if (!cancelado) {
+        setMiembrosCount(count ?? 0);
+        setLoadingInfo(false);
+      }
     })();
     return () => {
       cancelado = true;
