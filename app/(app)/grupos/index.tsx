@@ -1,8 +1,8 @@
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 
-import { GrupoConRol, listarMisGrupos } from '@/features/grupos/api';
+import { GrupoConRol } from '@/features/grupos/api';
+import { useMisGrupos } from '@/features/grupos/hooks';
 import { useAuthStore } from '@/stores/auth';
 import { useGrupoActivoStore } from '@/stores/grupoActivo';
 
@@ -26,33 +26,7 @@ export default function GruposScreen() {
   const user = useAuthStore((s) => s.user);
   const setGrupo = useGrupoActivoStore((s) => s.setGrupo);
 
-  const [grupos, setGrupos] = useState<GrupoConRol[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    if (!user) return;
-    const result = await listarMisGrupos();
-    if (!result.ok) {
-      setError(result.error);
-      setGrupos([]);
-    } else {
-      setGrupos(result.data);
-      setError(null);
-    }
-    setLoading(false);
-    setRefreshing(false);
-  }, [user]);
-
-  useEffect(() => {
-    if (user) void load();
-  }, [user, load]);
-
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    void load();
-  }, [load]);
+  const { data: grupos = [], isLoading, isRefetching, error, refetch } = useMisGrupos();
 
   const onAbrirGrupo = (g: GrupoConRol) => {
     setGrupo({ id: g.id, nombre: g.nombre, rol: g.rol });
@@ -81,7 +55,7 @@ export default function GruposScreen() {
         <Text className="text-sm font-semibold text-primary-600">+ Buscar otro grupo</Text>
       </Pressable>
 
-      {loading ? (
+      {isLoading ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color="#4f46e5" />
         </View>
@@ -110,7 +84,7 @@ export default function GruposScreen() {
           contentContainerClassName="p-4"
           ItemSeparatorComponent={() => <View className="h-3" />}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            <RefreshControl refreshing={isRefetching} onRefresh={refetch} />
           }
           renderItem={({ item }) => (
             <Pressable
@@ -179,7 +153,7 @@ export default function GruposScreen() {
 
       {error ? (
         <View className="border-t border-red-200 bg-red-50 px-4 py-3">
-          <Text className="text-sm text-red-700">{error}</Text>
+          <Text className="text-sm text-red-700">{error.message}</Text>
         </View>
       ) : null}
     </View>

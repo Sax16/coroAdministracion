@@ -3,6 +3,10 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 
+import { useQuery } from '@tanstack/react-query';
+
+import { unwrap } from '@/lib/query';
+import { qk } from '@/lib/queryKeys';
 import { GrupoActivo, useGrupoActivoStore } from '@/stores/grupoActivo';
 
 import {
@@ -21,28 +25,14 @@ export interface CrearGrupoInput {
 }
 
 /**
- * Hook para listar los grupos del usuario actual.
- * Expone loading, error y refetch.
+ * Lista los grupos del usuario actual con su rol (cacheado por TanStack
+ * Query bajo la key `qk.grupos()`). Varias pantallas comparten este caché.
  */
 export function useMisGrupos() {
-  const [grupos, setGrupos] = useState<GrupoConRol[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    const result = await listarMisGrupos();
-    if (!result.ok) {
-      setError(result.error);
-      setGrupos([]);
-    } else {
-      setGrupos(result.data);
-    }
-    setLoading(false);
-  }, []);
-
-  return { grupos, loading, error, refetch: load };
+  return useQuery({
+    queryKey: qk.grupos(),
+    queryFn: () => listarMisGrupos().then(unwrap),
+  });
 }
 
 /**
