@@ -67,53 +67,28 @@ export function useGrupoActivo() {
 // =============================================================================
 // Acciones admin sobre el grupo: transferir (RF-013) y eliminar (RF-012)
 // =============================================================================
-//
-// Estas dos acciones se usan desde dos pantallas:
-//   - Home del grupo (admin ve el panel de acciones)
-//   - Flujo "Eliminar mi cuenta" (RF-006), pre-flight
 
 /**
- * Hook que agrupa las acciones admin sobre un grupo: transferir admin
- * y eliminar grupo. Maneja loading + error.
+ * Mutación: eliminar (soft delete) un grupo (RF-012). Invalida la lista.
  */
-export function useAccionesGrupo() {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export function useEliminarGrupo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (grupoId: string) => apiEliminarGrupo(grupoId).then(unwrap),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.grupos() }),
+  });
+}
 
-  const transferir = useCallback(
-    async (input: { grupoId: string; nuevoAdminUsuarioGrupoId: string }) => {
-      setLoading(true);
-      setError(null);
-      const r = await apiTransferirAdmin(input);
-      setLoading(false);
-      if (!r.ok) {
-        setError(r.error);
-        return false;
-      }
-      return true;
-    },
-    [],
-  );
-
-  const eliminar = useCallback(async (grupoId: string) => {
-    setLoading(true);
-    setError(null);
-    const r = await apiEliminarGrupo(grupoId);
-    setLoading(false);
-    if (!r.ok) {
-      setError(r.error);
-      return false;
-    }
-    return true;
-  }, []);
-
-  return {
-    transferir,
-    eliminar,
-    loading,
-    error,
-    clearError: () => setError(null),
-  };
+/**
+ * Mutación: transferir el rol admin a otro miembro (RF-013). Invalida la lista.
+ */
+export function useTransferirAdmin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { grupoId: string; nuevoAdminUsuarioGrupoId: string }) =>
+      apiTransferirAdmin(input).then(unwrap),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.grupos() }),
+  });
 }
 
 // =============================================================================

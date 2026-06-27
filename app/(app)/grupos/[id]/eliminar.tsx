@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { useAccionesGrupo, useMisGrupos } from '@/features/grupos/hooks';
+import { useEliminarGrupo, useMisGrupos } from '@/features/grupos/hooks';
 import { supabase } from '@/lib/supabase';
 import { useGrupoActivoStore } from '@/stores/grupoActivo';
 
@@ -37,7 +37,7 @@ import { useGrupoActivoStore } from '@/stores/grupoActivo';
 export default function EliminarGrupoScreen() {
   const router = useRouter();
   const { id: grupoId } = useLocalSearchParams<{ id: string }>();
-  const { eliminar, loading, error, clearError } = useAccionesGrupo();
+  const eliminarGrupo = useEliminarGrupo();
   const grupoActivo = useGrupoActivoStore((s) => s.grupo);
   const setGrupo = useGrupoActivoStore((s) => s.setGrupo);
 
@@ -83,21 +83,18 @@ export default function EliminarGrupoScreen() {
           text: 'Sí, eliminar',
           style: 'destructive',
           onPress: async () => {
-            const ok = await eliminar(grupoId);
-            if (ok) {
-              // Si era el grupo activo, lo limpiamos del store
-              // para evitar que la app quede apuntando a un grupo
-              // soft-deleted.
-              if (grupoActivo?.id === grupoId) {
-                setGrupo(null);
-              }
+            try {
+              await eliminarGrupo.mutateAsync(grupoId);
+              if (grupoActivo?.id === grupoId) setGrupo(null);
               router.replace('/(app)/grupos');
+            } catch {
+              // Error mostrado vía eliminarGrupo.error.
             }
           },
         },
       ],
     );
-  }, [puedeConfirmar, grupoId, eliminar, router, nombre, grupoActivo, setGrupo]);
+  }, [puedeConfirmar, grupoId, eliminarGrupo, router, nombre, grupoActivo, setGrupo]);
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50" edges={['bottom']}>
@@ -179,31 +176,31 @@ export default function EliminarGrupoScreen() {
               <TextInput
                 value={confirmText}
                 onChangeText={(t) => {
-                  clearError();
+                  eliminarGrupo.reset();
                   setConfirmText(t);
                 }}
-                editable={!loading}
+                editable={!eliminarGrupo.isPending}
                 placeholder="ELIMINAR"
                 placeholderTextColor="#94a3b8"
                 autoCapitalize="characters"
                 autoCorrect={false}
                 className="mt-3 h-12 rounded-lg border border-slate-300 bg-white px-3 text-base text-slate-900"
               />
-              {error ? (
-                <Text className="mt-2 text-sm text-red-600">{error}</Text>
+              {eliminarGrupo.error ? (
+                <Text className="mt-2 text-sm text-red-600">{eliminarGrupo.error.message}</Text>
               ) : null}
             </View>
 
             <Pressable
               onPress={onConfirmar}
-              disabled={!puedeConfirmar || loading}
+              disabled={!puedeConfirmar || eliminarGrupo.isPending}
               className={`h-12 items-center justify-center rounded-lg ${
-                puedeConfirmar && !loading
+                puedeConfirmar && !eliminarGrupo.isPending
                   ? 'bg-red-600 active:bg-red-700'
                   : 'bg-slate-300'
               }`}
             >
-              {loading ? (
+              {eliminarGrupo.isPending ? (
                 <ActivityIndicator color="#ffffff" />
               ) : (
                 <Text
@@ -218,7 +215,7 @@ export default function EliminarGrupoScreen() {
 
             <Pressable
               onPress={() => router.back()}
-              disabled={loading}
+              disabled={eliminarGrupo.isPending}
               className="mt-3 h-11 items-center justify-center rounded-lg border border-slate-300 bg-white active:bg-slate-50"
             >
               <Text className="text-sm font-semibold text-slate-700">

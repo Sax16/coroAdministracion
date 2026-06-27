@@ -12,8 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { listarMiembrosActivos } from '@/features/asignaciones/api';
 import { MiembroGrupo } from '@/features/asignaciones/types';
-import { listarMisGrupos } from '@/features/grupos/api';
-import { useAccionesGrupo } from '@/features/grupos/hooks';
+import { useMisGrupos, useTransferirAdmin } from '@/features/grupos/hooks';
 import { useAuthStore } from '@/stores/auth';
 
 /**
@@ -38,9 +37,10 @@ export default function TransferirAdminScreen() {
   const origen = params.origen;
 
   const user = useAuthStore((s) => s.user);
-  const { transferir, loading, error, clearError } = useAccionesGrupo();
+  const transferirAdmin = useTransferirAdmin();
+  const { data: misGrupos } = useMisGrupos();
+  const nombreGrupo = misGrupos?.find((g) => g.id === grupoId)?.nombre ?? null;
 
-  const [nombreGrupo, setNombreGrupo] = useState<string | null>(null);
   const [candidatos, setCandidatos] = useState<MiembroGrupo[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [seleccionado, setSeleccionado] = useState<MiembroGrupo | null>(null);
@@ -49,13 +49,7 @@ export default function TransferirAdminScreen() {
     if (!grupoId) return;
     setLoadingList(true);
 
-    // 1. Nombre del grupo (para el header)
-    const gRes = await listarMisGrupos();
-    if (gRes.ok) {
-      setNombreGrupo(gRes.data.find((g) => g.id === grupoId)?.nombre ?? null);
-    }
-
-    // 2. Miembros activos (reusamos el helper de asignaciones)
+    // Miembros activos (reusamos el helper de asignaciones)
     const mRes = await listarMiembrosActivos(grupoId);
     if (mRes.ok) {
       // Excluimos al admin actual de la lista. La función
@@ -81,23 +75,24 @@ export default function TransferirAdminScreen() {
         {
           text: 'Sí, transferir',
           onPress: async () => {
-            const ok = await transferir({
-              grupoId,
-              nuevoAdminUsuarioGrupoId: seleccionado.usuario_grupo_id,
-            });
-            if (ok) {
+            try {
+              await transferirAdmin.mutateAsync({
+                grupoId,
+                nuevoAdminUsuarioGrupoId: seleccionado.usuario_grupo_id,
+              });
               if (origen === 'eliminar-cuenta') {
-                // Volvemos al flujo de eliminar cuenta, no al home.
                 router.replace('/(app)/perfil/eliminar');
               } else {
                 router.back();
               }
+            } catch {
+              // Error mostrado vía transferirAdmin.error.
             }
           },
         },
       ],
     );
-  }, [seleccionado, grupoId, transferir, router, origen]);
+  }, [seleccionado, grupoId, transferirAdmin, router, origen]);
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50" edges={['bottom']}>
@@ -147,32 +142,32 @@ export default function TransferirAdminScreen() {
               miembro={item}
               seleccionado={seleccionado?.usuario_grupo_id === item.usuario_grupo_id}
               onPress={() => {
-                clearError();
+                transferirAdmin.reset();
                 setSeleccionado(item);
               }}
-              disabled={loading}
+              disabled={transferirAdmin.isPending}
             />
           )}
         />
       )}
 
-      {error ? (
+      {transferirAdmin.error ? (
         <View className="border-t border-red-200 bg-red-50 px-4 py-2">
-          <Text className="text-sm text-red-700">{error}</Text>
+          <Text className="text-sm text-red-700">{transferirAdmin.error.message}</Text>
         </View>
       ) : null}
 
       <View className="border-t border-slate-200 bg-white p-4">
         <Pressable
           onPress={onConfirmar}
-          disabled={!seleccionado || loading}
+          disabled={!seleccionado || transferirAdmin.isPending}
           className={`h-12 items-center justify-center rounded-lg ${
-            seleccionado && !loading
+            seleccionado && !transferirAdmin.isPending
               ? 'bg-primary-600 active:bg-primary-700'
               : 'bg-slate-300'
           }`}
         >
-          {loading ? (
+          {transferirAdmin.isPending ? (
             <ActivityIndicator color="#ffffff" />
           ) : (
             <Text

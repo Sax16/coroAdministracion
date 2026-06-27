@@ -15,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useEliminarCuenta } from '@/features/auth/hooks';
 import { GrupoConRol } from '@/features/grupos/api';
-import { useAccionesGrupo, useGruposAdminActivos } from '@/features/grupos/hooks';
+import { useEliminarGrupo, useGruposAdminActivos } from '@/features/grupos/hooks';
 
 /**
  * Flujo destructivo "Eliminar mi cuenta" (RF-006).
@@ -45,7 +45,7 @@ export default function EliminarCuentaScreen() {
   const router = useRouter();
   const { eliminar, loading: deleting, error: deleteError } =
     useEliminarCuenta();
-  const { eliminar: eliminarGrupo } = useAccionesGrupo();
+  const eliminarGrupoMutation = useEliminarGrupo();
   const {
     grupos: gruposAdmin,
     loading: loadingGrupos,
@@ -102,17 +102,21 @@ export default function EliminarCuentaScreen() {
             style: 'destructive',
             onPress: async () => {
               setEliminandoGrupoId(g.id);
-              const ok = await eliminarGrupo(g.id);
-              setEliminandoGrupoId(null);
-              if (ok) {
+              try {
+                await eliminarGrupoMutation.mutateAsync(g.id);
                 await refetchGrupos();
+              } catch {
+                // Error absorbido; la invalidación del caché de grupos
+                // ya ocurrió si hubo éxito (onSuccess en el hook).
+              } finally {
+                setEliminandoGrupoId(null);
               }
             },
           },
         ],
       );
     },
-    [eliminarGrupo, refetchGrupos],
+    [eliminarGrupoMutation, refetchGrupos],
   );
 
   // Si la DB rechaza con el mensaje "Debes transferir o eliminar el
