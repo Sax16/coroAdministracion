@@ -1,0 +1,23 @@
+-- =============================================================================
+-- 20260626020000_drop_validar_admin_es_miembro.sql
+-- =============================================================================
+-- Elimina la función huérfana public.validar_admin_es_miembro().
+--
+-- Contexto:
+-- - La función existía en la DB hosted pero NO en ninguna migración del repo
+--   (drift). La detectó la verificación de pg_proc tras el hardening de
+--   search_path (aparecía con proconfig = null).
+-- - Es un resto del experimento de constraint-trigger para validar que el
+--   admin de un grupo sea miembro activo, enfoque DESCARTADO explícitamente
+--   (ver 20260614000000_initial_schema.sql, sección 8, comentario ~950-965:
+--   "se descartó... las únicas 2 rutas... validan manualmente").
+-- - Diagnóstico en la DB (2026-06-26): ningún trigger la invoca (pg_trigger
+--   no devuelve filas para esta función). Su cuerpo conserva `raise notice`
+--   de depuración y un `raise exception 'fail'` placeholder: código muerto.
+--
+-- Efecto: alinea la DB con el repo, limpia el linter `function_search_path_mutable`
+-- y elimina código confuso. Sin CASCADE a propósito: si hubiera una dependencia
+-- inesperada, preferimos que falle a arrastrarla en silencio.
+-- =============================================================================
+
+drop function if exists public.validar_admin_es_miembro();
