@@ -270,7 +270,7 @@ export function useAlarmaScheduler(
           servicioId: ev.id, // el identificador único del evento
           fechaInicioISO: ev.fecha_inicio,
           offsetMinutos,
-          tituloServicio: titulo,
+          tituloEvento: titulo,
           grupoNombre,
         });
         if (result.ok && result.data) {

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -96,7 +97,7 @@ export default function MiSemanaScreen() {
         'Para que la app te avise antes de cada servicio o ensayo, activá las notificaciones en los ajustes del sistema.',
         [
           { text: 'Más tarde', style: 'cancel' },
-          { text: 'Ir a Ajustes', onPress: () => router.push('/(app)/grupos') },
+          { text: 'Ir a Ajustes', onPress: () => void Linking.openSettings() },
         ],
       );
     }

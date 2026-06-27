@@ -32,9 +32,8 @@
  *   y se re-generan servicios).
  * - `cancelAllAlarms()`: limpia todas las alarmas agendadas.
  */
-import { Platform } from 'react-native';
+import { Platform, PermissionsAndroid } from 'react-native';
 import * as Notifications from 'expo-notifications';
-import * as PermissionsAndroid from 'react-native/Libraries/PermissionsAndroid/PermissionsAndroid';
 
 import { Result } from '@/lib/result';
 
@@ -92,7 +91,6 @@ export function configureNotifications(): void {
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#FF231F7C',
-      sound: 'default',
       enableVibrate: true,
       showBadge: true,
     });
@@ -172,8 +170,25 @@ export interface ScheduleAlarmInput {
   servicioId: string;
   fechaInicioISO: string;
   offsetMinutos: number;
-  tituloServicio: string;
+  /** Título ya compuesto del evento (ej. "Ensayo: Cumbre" o el título del servicio). */
+  tituloEvento: string;
   grupoNombre: string;
+}
+
+/**
+ * Describe la antelación en español natural a partir del offset (minutos)
+ * configurado en el patrón del grupo. El offset es configurable, así que el
+ * texto NO puede asumir "1 hora". Ej: 60 → "en 1 hora", 90 → "en 1 hora y
+ * 30 minutos", 30 → "en 30 minutos", 0 → "ahora".
+ */
+function describirAntelacion(min: number): string {
+  if (min <= 0) return 'ahora';
+  const horas = Math.floor(min / 60);
+  const minutos = min % 60;
+  const partes: string[] = [];
+  if (horas > 0) partes.push(`${horas} ${horas === 1 ? 'hora' : 'horas'}`);
+  if (minutos > 0) partes.push(`${minutos} ${minutos === 1 ? 'minuto' : 'minutos'}`);
+  return `en ${partes.join(' y ')}`;
 }
 
 /**
@@ -198,9 +213,9 @@ export async function scheduleAlarm(
     const id = await Notifications.scheduleNotificationAsync({
       identifier: `alarm-${input.servicioId}`,
       content: {
-        title: 'Servicio en 1 hora',
-        body: `${input.tituloServicio} — ${input.grupoNombre}`,
-        sound: 'default',
+        title: input.tituloEvento,
+        body: `Empieza ${describirAntelacion(input.offsetMinutos)} · ${input.grupoNombre}`,
+        ...(Platform.OS === 'ios' ? { sound: 'default' as const } : {}),
         interruptionLevel: 'timeSensitive',
         categoryIdentifier: CATEGORY_ID,
         ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
