@@ -106,8 +106,10 @@ export default function EliminarCuentaScreen() {
                 await eliminarGrupoMutation.mutateAsync(g.id);
                 await refetchGrupos();
               } catch {
-                // Error absorbido; la invalidación del caché de grupos
-                // ya ocurrió si hubo éxito (onSuccess en el hook).
+                // Falló el borrado: no se invalida el caché y el grupo sigue
+                // en la lista. El usuario puede reintentar. (El estado de
+                // error de la mutación no se muestra en este flujo — mismo
+                // comportamiento que antes de migrar a useMutation.)
               } finally {
                 setEliminandoGrupoId(null);
               }
