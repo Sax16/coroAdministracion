@@ -118,25 +118,28 @@ serve(async (req: Request) => {
     return jsonResponse({ error: 'Method not allowed' }, 405);
   }
 
-  // Auth: la app manda el anon key o service_role key. Si es anon key,
-  // verificamos que la sesión sea válida. En la práctica, para MVP la
-  // app manda con el cliente Supabase normal que adjunta anon key +
-  // Authorization header. La función la dejamos abierta a usuarios
-  // autenticados y validamos el grupo en la lógica de cada handler.
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader) {
-    return jsonResponse({ error: 'Missing Authorization header' }, 401);
-  }
-
+  // 1. Parseo del body primero: la autorización depende de tipo + grupo.
   let body: NotificarPushRequest;
   try {
     body = await req.json();
   } catch {
     return jsonResponse({ error: 'Invalid JSON body' }, 400);
   }
-
   if (!body.tipo || !body.payload) {
     return jsonResponse({ error: 'Missing tipo or payload' }, 400);
+  }
+
+  // 2. Auth: validar el JWT del llamante y autorizarlo contra el grupo del
+  //    evento. La función usa service_role internamente (bypassa RLS), así que
+  //    ESTA es la única barrera multi-tenant: sin ella cualquier autenticado
+  //    podría spamear push o inyectar historial en grupos ajenos.
+  const jwt = (req.headers.get('Authorization') ?? '').replace('Bearer ', '');
+  const { data: userData } = await supabaseAdmin.auth.getUser(jwt);
+  if (!userData?.user) {
+    return jsonResponse({ error: 'No autenticado' }, 401);
+  }
+  if (!(await autorizarEvento(userData.user.id, body))) {
+    return jsonResponse({ error: 'No autorizado para este grupo' }, 403);
   }
 
   try {
@@ -159,6 +162,38 @@ interface ProcessResult {
   destinatarios: number;
   enviados: number;
   errores: number;
+}
+
+// =============================================================================
+// Autorización (multi-tenant): quién puede disparar cada evento
+// =============================================================================
+
+async function autorizarEvento(
+  userId: string,
+  req: NotificarPushRequest,
+): Promise<boolean> {
+  switch (req.tipo) {
+    case 'comunicado_publicado':
+      // Solo el admin del grupo publica comunicados
+      // (RLS "comunicados: insertar solo admin").
+      return await esAdminDe(userId, req.payload.grupo_id as string);
+    default:
+      // Resto de eventos: deshabilitados hasta que se cableen con su regla.
+      return false;
+  }
+}
+
+async function esAdminDe(userId: string, grupoId: string): Promise<boolean> {
+  if (!grupoId) return false;
+  const { data } = await supabaseAdmin
+    .from('usuarios_grupos')
+    .select('id')
+    .eq('usuario_id', userId)
+    .eq('grupo_id', grupoId)
+    .eq('rol', 'admin')
+    .eq('estado', 'activo')
+    .maybeSingle();
+  return !!data;
 }
 
 async function procesarEvento(
@@ -192,7 +227,7 @@ async function procesarEvento(
     to: d.expo_push_token,
     title: titulo,
     body: cuerpo,
-    data: { ...data, notification_id: '' }, // notification_id se completa abajo
+    data,
     sound: 'default',
     priority: 'high',
     channelId: 'alarm',
