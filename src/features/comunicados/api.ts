@@ -13,6 +13,7 @@
 import { supabase } from '@/lib/supabase';
 import { Result } from '@/lib/result';
 import { mapErr, mapSupabaseError } from '@/lib/errores';
+import { notificarPush } from '@/lib/pushApi';
 import { TablesUpdate } from '@/types/database.types';
 
 import {
@@ -96,6 +97,15 @@ export async function crearComunicado(
       .single();
 
     if (error) return { ok: false, error: mapSupabaseError(error) };
+
+    // Push best-effort: no bloquea ni revierte el alta si falla (notificarPush
+    // atrapa todo y devuelve Result). Este es el molde para el resto de eventos.
+    void notificarPush('comunicado_publicado', {
+      grupo_id: input.grupo_id,
+      comunicado_id: data.id,
+      titulo: input.titulo,
+    });
+
     return { ok: true, data: { id: data.id } };
   } catch (e) {
     return { ok: false, error: mapErr(e) };
