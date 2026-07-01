@@ -50,7 +50,7 @@
 │  │         Capa de datos (src/lib)           │              │
 │  │  - supabaseClient (singleton)            │              │
 │  │  - queries tipadas por tabla             │              │
-│  │  - realtime subscriptions                │              │
+│  │  - realtime subscriptions (v0.2.0)       │              │
 │  │  - scheduler de alarmas locales          │              │
 │  └─────────────────┬────────────────────────┘              │
 └────────────────────┼────────────────────────────────────────┘
@@ -81,7 +81,7 @@
 2. **Multi-tenant con RLS estricta.** Cada fila de cualquier tabla tiene `grupo_id` (o se llega a él transitivamente). Las políticas de RLS filtran por `grupo_id` del usuario actual. **No hay forma de que un usuario vea datos de un grupo al que no pertenece.**
 3. **Tipado end-to-end.** Tipos generados desde el esquema de Supabase (`supabase gen types`) hacia TypeScript.
 4. **Feature-first en el código.** Estructura por dominio (`/features/grupos`, `/features/servicios`, `/features/asignaciones`), no por tipo de archivo.
-5. **Offline-friendly (caché, no modo offline completo).** TanStack Query maneja caché en disco; las suscripciones realtime rehidratan al volver online. La app no es usable sin internet en MVP.
+5. **Offline-friendly (caché, no modo offline completo).** TanStack Query maneja caché; tras reconectar, el refresco es **manual** (pull-to-refresh / re-fetch al enfocar la pantalla / invalidación de queries tras mutaciones). Las suscripciones realtime que rehidratarían solas al volver online son de **v0.2.0** (ver §4). La app no es usable sin internet en MVP.
 
 ## 3. Estructura de carpetas propuesta
 
@@ -153,7 +153,7 @@ coroAdministracion/
 - **Auth**: email/password.
 - **Postgres**: 14 tablas (ver `04-modelo-de-datos.md`). Todas con `grupo_id` o accesibles vía FK transitiva, excepto `perfiles` y `dispositivos` que son a nivel de usuario.
 - **RLS** (Row Level Security): políticas estrictas en TODAS las tablas. Helper functions en `public.` (no en `auth.`). Patrón: `using (grupo_id in (select public.usuario_grupos_activos(auth.uid())))`.
-- **Realtime**: subscripción a `servicios`, `asignaciones_servicio`, `ensayos`, `comunicados`, `justificaciones` para que la lista se actualice sola.
+- **Realtime**: **planificado para v0.2.0 — NO implementado en el MVP.** La intención es suscribirse a `servicios`, `asignaciones_servicio`, `ensayos`, `comunicados`, `justificaciones` para que las listas se actualicen solas. **Hoy el refresco es manual**: `useFocusEffect` al volver a una pantalla, pull-to-refresh, y —en las features ya migradas a TanStack Query (p. ej. `grupos`)— invalidación de queries tras las mutaciones. ⚠️ **Nota de seguridad para cuando se implemente:** Supabase Realtime no aplica RLS al stream por defecto; hay que configurar *Realtime Authorization* + agregar las tablas a la publicación, o filtraría cambios de filas entre grupos (rompiendo el aislamiento multi-tenant).
 - **Edge Functions**: en MVP se usan **solo** para disparar push notifications cuando se crea/modifica/cancela un servicio/ensayo/comunicado. La lógica de push personalizada lee tokens de la tabla `dispositivos`.
 - **Storage**: para fotos de perfil (1 bucket `avatars`, RLS por usuario).
 
