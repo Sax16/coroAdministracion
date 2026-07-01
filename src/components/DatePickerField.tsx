@@ -62,6 +62,11 @@ export function DatePickerField({
   // API moderna (>= 9.0): onValueChange se llama cuando el usuario
   // confirma un valor nuevo, onDismiss cuando cierra sin elegir.
   const handleValueChange = (_event: unknown, selected?: Date) => {
+    // En Android el picker es un diálogo modal montado mientras
+    // `showAndroidPicker` sea true. Al confirmar hay que cerrarlo; si no,
+    // el diálogo se re-abre en cada render (bug: "acepto y se vuelve a
+    // abrir"). En iOS es inline, así que esto es un no-op.
+    if (Platform.OS === 'android') setShowAndroidPicker(false);
     if (!selected) return;
     onChange(selected);
   };
