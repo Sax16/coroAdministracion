@@ -4,12 +4,14 @@
  * Campos:
  * - titulo (obligatorio)
  * - descripcion (obligatorio, multilinea)
- * - fecha_inicio (opcional, formato YYYY-MM-DDTHH:MM o vacío)
+ * - fecha_inicio (opcional): si el toggle "Con fecha" está activo,
+ *   se muestra un DatePickerField + TimePickerField. Si no, no se
+ *   manda fecha_inicio a la DB.
  * - lugar (opcional)
  *
- * Decisión: fecha_inicio se pide como dos inputs separados (fecha +
- * hora) para mantener consistencia con los forms de ensayo y
- * servicio. Si ambos están vacíos, no se manda fecha_inicio.
+ * Decisión: la fecha/hora opcionales se piden con los pickers nativos
+ * (DatePickerField + TimePickerField). El form trabaja con `Date`
+ * local y recién al guardar convierte a ISO UTC.
  */
 import { useCallback, useState } from 'react';
 import {
@@ -24,9 +26,11 @@ import {
 } from 'react-native';
 
 import { Button } from '@/components/Button';
+import { DatePickerField } from '@/components/DatePickerField';
+import { TimePickerField } from '@/components/TimePickerField';
 import { useGestionComunicados } from '@/features/comunicados/hooks';
 import { Comunicado, CrearComunicadoInput, EditarComunicadoInput } from '@/features/comunicados/types';
-import { notificarPush } from '@/lib/pushApi';
+import { combineLocalDateTime, dateToHHMM, isoToLocalDate } from '@/lib/dateTime';
 
 interface ComunicadoFormProps {
   mode: 'create' | 'edit';
@@ -35,46 +39,6 @@ interface ComunicadoFormProps {
   comunicado?: Comunicado | null;
   onGuardado: (id: string) => void;
   onCancelar: () => void;
-}
-
-function formatearFechaInput(iso: string | null): string {
-  if (!iso) return '';
-  try {
-    const d = new Date(iso);
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
-  } catch {
-    return '';
-  }
-}
-
-function formatearHoraInput(iso: string | null): string {
-  if (!iso) return '';
-  try {
-    const d = new Date(iso);
-    const hh = String(d.getHours()).padStart(2, '0');
-    const mm = String(d.getMinutes()).padStart(2, '0');
-    return `${hh}:${mm}`;
-  } catch {
-    return '';
-  }
-}
-
-function combinarFechaHora(fecha: string, hora: string): string | null {
-  if (!fecha) return null;
-  const h = hora || '00:00';
-  const d = new Date(`${fecha}T${h}:00`);
-  return isNaN(d.getTime()) ? null : d.toISOString();
-}
-
-function isFechaValida(fecha: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}$/.test(fecha);
-}
-
-function isHoraValida(hora: string): boolean {
-  return hora === '' || /^([01]\d|2[0-3]):[0-5]\d$/.test(hora);
 }
 
 export function ComunicadoForm({
@@ -88,8 +52,14 @@ export function ComunicadoForm({
 
   const [titulo, setTitulo] = useState(comunicado?.titulo ?? '');
   const [descripcion, setDescripcion] = useState(comunicado?.descripcion ?? '');
-  const [fecha, setFecha] = useState(formatearFechaInput(comunicado?.fecha_inicio ?? null));
-  const [hora, setHora] = useState(formatearHoraInput(comunicado?.fecha_inicio ?? null));
+  const [fecha, setFecha] = useState<Date | null>(
+    comunicado?.fecha_inicio ? isoToLocalDate(comunicado.fecha_inicio) : null,
+  );
+  const [hora, setHora] = useState<Date | null>(() => {
+    if (!comunicado?.fecha_inicio) return null;
+    const d = new Date(comunicado.fecha_inicio);
+    return isNaN(d.getTime()) ? null : d;
+  });
   const [lugar, setLugar] = useState(comunicado?.lugar ?? '');
   const [tieneFecha, setTieneFecha] = useState(!!comunicado?.fecha_inicio);
   const [errores, setErrores] = useState<Record<string, string>>({});
@@ -98,17 +68,24 @@ export function ComunicadoForm({
     const e: Record<string, string> = {};
     if (!titulo.trim()) e.titulo = 'El título es obligatorio';
     if (!descripcion.trim()) e.descripcion = 'La descripción es obligatoria';
-    if (fecha && !isFechaValida(fecha)) e.fecha = 'Formato YYYY-MM-DD';
-    if (!isHoraValida(hora)) e.hora = 'Formato HH:MM (24h)';
+    // Si tieneFecha está activo, ambos campos son obligatorios
+    if (tieneFecha) {
+      if (!fecha) e.fecha = 'Seleccioná una fecha';
+      if (!hora) e.hora = 'Seleccioná una hora';
+    }
     setErrores(e);
     return Object.keys(e).length === 0;
-  }, [titulo, descripcion, fecha, hora]);
+  }, [titulo, descripcion, fecha, hora, tieneFecha]);
 
   const onGuardar = useCallback(async () => {
     clearError();
     if (!validar()) return;
 
-    const fechaInicioISO = tieneFecha ? combinarFechaHora(fecha, hora) : null;
+    const fechaInicioISO =
+      tieneFecha && fecha && hora
+        ? combineLocalDateTime(fecha, dateToHHMM(hora))
+        : null;
+
     const datosComunes = {
       titulo: titulo.trim(),
       descripcion: descripcion.trim(),
@@ -120,22 +97,18 @@ export function ComunicadoForm({
       const input: CrearComunicadoInput = { grupo_id: grupoId, ...datosComunes };
       const result = await crear(input);
       if (result) {
-        // Push a todos los miembros del grupo
-        await notificarPush('comunicado_publicado', {
-          grupo_id: grupoId,
-          comunicado_id: result.id,
-          titulo: input.titulo,
-          fecha_inicio: input.fecha_inicio,
-          lugar: input.lugar,
-        });
-        Alert.alert('Comunicado publicado', 'Los miembros del grupo recibirán un push.', [
+        Alert.alert('Comunicado creado', '', [
           { text: 'OK', onPress: () => onGuardado(result.id) },
         ]);
       }
     } else if (comunicado) {
       const cambios: EditarComunicadoInput = datosComunes;
       const ok = await editar(comunicado.id, cambios);
-      if (ok) onGuardado(comunicado.id);
+      if (ok) {
+        Alert.alert('Comunicado actualizado', '', [
+          { text: 'OK', onPress: () => onGuardado(comunicado.id) },
+        ]);
+      }
     }
   }, [
     mode,
@@ -143,10 +116,10 @@ export function ComunicadoForm({
     comunicado,
     titulo,
     descripcion,
-    tieneFecha,
     fecha,
     hora,
     lugar,
+    tieneFecha,
     validar,
     crear,
     editar,
@@ -156,7 +129,7 @@ export function ComunicadoForm({
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       className="flex-1 bg-slate-50"
     >
       <ScrollView contentContainerClassName="pb-10" keyboardShouldPersistTaps="handled">
@@ -225,41 +198,19 @@ export function ComunicadoForm({
             </Pressable>
           </View>
           {tieneFecha ? (
-            <View className="mt-3 flex-row gap-3">
-              <View className="flex-1">
-                <Text className="mb-1.5 text-sm font-medium text-slate-700">Fecha</Text>
-                <TextInput
-                  value={fecha}
-                  onChangeText={setFecha}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor="#94a3b8"
-                  keyboardType="numbers-and-punctuation"
-                  maxLength={10}
-                  className={`h-12 rounded-lg border bg-white px-3 text-base text-slate-900 ${
-                    errores.fecha ? 'border-red-500' : 'border-slate-300'
-                  }`}
-                />
-                {errores.fecha ? (
-                  <Text className="mt-1 text-xs text-red-600">{errores.fecha}</Text>
-                ) : null}
-              </View>
-              <View className="flex-1">
-                <Text className="mb-1.5 text-sm font-medium text-slate-700">Hora</Text>
-                <TextInput
-                  value={hora}
-                  onChangeText={setHora}
-                  placeholder="HH:MM"
-                  placeholderTextColor="#94a3b8"
-                  keyboardType="numbers-and-punctuation"
-                  maxLength={5}
-                  className={`h-12 rounded-lg border bg-white px-3 text-base text-slate-900 ${
-                    errores.hora ? 'border-red-500' : 'border-slate-300'
-                  }`}
-                />
-                {errores.hora ? (
-                  <Text className="mt-1 text-xs text-red-600">{errores.hora}</Text>
-                ) : null}
-              </View>
+            <View className="mt-3">
+              <DatePickerField
+                label="Fecha"
+                value={fecha}
+                onChange={setFecha}
+                error={errores.fecha}
+              />
+              <TimePickerField
+                label="Hora"
+                value={hora}
+                onChange={setHora}
+                error={errores.hora}
+              />
             </View>
           ) : null}
         </View>
@@ -282,7 +233,7 @@ export function ComunicadoForm({
           </View>
           <View className="flex-1">
             <Button
-              title={mode === 'create' ? 'Publicar' : 'Guardar cambios'}
+              title={mode === 'create' ? 'Crear comunicado' : 'Guardar cambios'}
               onPress={onGuardar}
               loading={loading}
             />

@@ -10,8 +10,15 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
+import { DatePickerField } from '@/components/DatePickerField';
 import { LabeledInput } from '@/components/LabeledInput';
+import { TimePickerField } from '@/components/TimePickerField';
 import { useCrearServicioExcepcional } from '@/features/servicios/hooks';
+import {
+  combineLocalDateTime,
+  dateToHHMM,
+  hhmmToDate,
+} from '@/lib/dateTime';
 
 /**
  * Pantalla "Nuevo servicio excepcional" (RF-043).
@@ -22,18 +29,15 @@ import { useCrearServicioExcepcional } from '@/features/servicios/hooks';
  * generación NO lo pise en la próxima corrida.
  *
  * Decisiones de UX:
- * - Inputs de fecha y hora MANUALES (no usamos `expo-date-time-picker`
- *   para no sumar una dependencia en el MVP). Formatos:
- *     - Fecha: `DD/MM/AAAA` con `inputMode="numeric"`.
- *     - Hora: `HH:MM` (24h) con `inputMode="numeric"`.
- *   El form arma un `Date` local y lo manda a Supabase como ISO UTC.
- *   El listado y "mi semana" lo formatean de vuelta a local con
- *   `formatearHora()`.
+ * - Fecha y hora con DatePickerField + TimePickerField (wrappers sobre
+ *   `@react-native-community/datetimepicker`). Mucho mejor UX que tipear
+ *   "DD/MM/AAAA" a mano.
+ * - Trabajamos en hora local: el form arma un `Date` local y lo manda
+ *   a Supabase como ISO UTC. El listado y "mi semana" lo formatean de
+ *   vuelta a local con `formatearHora()`.
  * - Validación cliente: título no vacío (1-120), fecha no en el
  *   pasado, hora válida (0-23 / 0-59), lugar y descripción opcionales.
- *   Si la fecha/hora no parsea, mostramos error inline.
- * - La DB enforcea `fecha_inicio not null` y `grupo_id not null`; la
- *   RLS exige admin del grupo. Lo dejamos así.
+ * - `minDate` en el DatePickerField = hoy (no se puede elegir pasado).
  *
  * Al guardar, `router.back()`. La vista semanal (RF-050) re-fetchea
  * con `useFocusEffect`, así que el servicio nuevo aparece al volver.
@@ -45,13 +49,24 @@ export default function NuevoServicioExcepcionalScreen() {
   const { crear, loading, error, clearError } = useCrearServicioExcepcional();
 
   const [titulo, setTitulo] = useState('');
-  const [fecha, setFecha] = useState(''); // DD/MM/AAAA
-  const [hora, setHora] = useState(''); // HH:MM
+  const [fecha, setFecha] = useState<Date | null>(null);
+  const [hora, setHora] = useState<Date | null>(hhmmToDate('19:00'));
   const [lugar, setLugar] = useState('');
   const [descripcion, setDescripcion] = useState('');
-  const [validationError, setValidationError] = useState<string | null>(null);
+  const [errores, setErrores] = useState<Record<string, string>>({});
 
-  const parsedFechaHora = useMemo(() => parseFechaHora(fecha, hora), [fecha, hora]);
+  const parsedFechaHora = useMemo(() => {
+    if (!fecha || !hora) {
+      return { ok: false as const, error: 'Completá fecha y hora' };
+    }
+    const iso = combineLocalDateTime(fecha, dateToHHMM(hora));
+    if (!iso) return { ok: false as const, error: 'Hora inválida' };
+    // No en el pasado (margen 1 min)
+    if (new Date(iso).getTime() < Date.now() - 60_000) {
+      return { ok: false as const, error: 'La fecha y hora no pueden ser en el pasado' };
+    }
+    return { ok: true as const, iso };
+  }, [fecha, hora]);
 
   const canSubmit =
     titulo.trim().length >= 1 &&
@@ -61,12 +76,21 @@ export default function NuevoServicioExcepcionalScreen() {
     (descripcion.length === 0 || descripcion.length <= 500);
 
   const onSubmit = async () => {
-    if (!canSubmit || !grupoId) {
-      // Forzamos mostrar el error inline
-      if (!parsedFechaHora.ok) setValidationError(parsedFechaHora.error);
+    // Forzar mostrar errores inline si los hay
+    const e: Record<string, string> = {};
+    if (!titulo.trim()) e.titulo = 'El título es obligatorio';
+    if (!fecha) e.fecha = 'Seleccioná una fecha';
+    if (!hora) e.hora = 'Seleccioná una hora';
+    if (Object.keys(e).length > 0) {
+      setErrores(e);
       return;
     }
-    setValidationError(null);
+    if (!parsedFechaHora.ok || !grupoId) {
+      setErrores({ fecha: parsedFechaHora.ok ? '' : parsedFechaHora.error });
+      return;
+    }
+
+    setErrores({});
     const r = await crear({
       grupoId,
       titulo,
@@ -78,6 +102,13 @@ export default function NuevoServicioExcepcionalScreen() {
       router.back();
     }
   };
+
+  // minDate: hoy a las 00:00 local (no permite días pasados)
+  const minDate = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={['bottom']}>
@@ -111,44 +142,40 @@ export default function NuevoServicioExcepcionalScreen() {
             value={titulo}
             onChangeText={(t) => {
               clearError();
-              setValidationError(null);
+              setErrores((prev) => ({ ...prev, titulo: '' }));
               setTitulo(t);
             }}
             placeholder="Ej. Servicio especial de viernes"
             autoCapitalize="sentences"
             maxLength={120}
+            error={errores.titulo}
             editable={!loading}
           />
 
-          <View className="mt-2 flex-row gap-3">
+          <View className="flex-row gap-3">
             <View className="flex-1">
-              <LabeledInput
+              <DatePickerField
                 label="Fecha"
                 value={fecha}
-                onChangeText={(t) => {
+                onChange={(d) => {
                   clearError();
-                  setValidationError(null);
-                  setFecha(t);
+                  setErrores((prev) => ({ ...prev, fecha: '' }));
+                  setFecha(d);
                 }}
-                placeholder="DD/MM/AAAA"
-                inputMode="numeric"
-                maxLength={10}
-                editable={!loading}
+                minDate={minDate}
+                error={errores.fecha}
               />
             </View>
             <View className="flex-1">
-              <LabeledInput
+              <TimePickerField
                 label="Hora"
                 value={hora}
-                onChangeText={(t) => {
+                onChange={(d) => {
                   clearError();
-                  setValidationError(null);
-                  setHora(t);
+                  setErrores((prev) => ({ ...prev, hora: '' }));
+                  setHora(d);
                 }}
-                placeholder="HH:MM"
-                inputMode="numeric"
-                maxLength={5}
-                editable={!loading}
+                error={errores.hora}
               />
             </View>
           </View>
@@ -173,9 +200,6 @@ export default function NuevoServicioExcepcionalScreen() {
             editable={!loading}
           />
 
-          {validationError ? (
-            <Text className="mb-3 text-sm text-red-600">{validationError}</Text>
-          ) : null}
           {error ? (
             <Text className="mb-3 text-sm text-red-600">{error}</Text>
           ) : null}
@@ -197,77 +221,4 @@ export default function NuevoServicioExcepcionalScreen() {
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
-}
-
-// =============================================================================
-// Helper: parsear "DD/MM/AAAA" + "HH:MM" a ISO UTC
-// =============================================================================
-
-type ParsedFechaHora =
-  | { ok: true; iso: string }
-  | { ok: false; error: string };
-
-/**
- * Parsea una fecha en formato `DD/MM/AAAA` y hora `HH:MM` (24h) y
- * devuelve el timestamp en ISO UTC. Valida:
- * - Fecha con formato y rangos correctos (día 1-31, mes 1-12, año
- *   razonable).
- * - Hora con formato y rangos (0-23, 0-59).
- * - Que la fecha resultante no esté en el pasado (con un margen de
- *   1 minuto para evitar líos con la hora actual).
- */
-function parseFechaHora(fecha: string, hora: string): ParsedFechaHora {
-  if (!fecha.trim() || !hora.trim()) {
-    return { ok: false, error: 'Completá fecha y hora' };
-  }
-
-  const fechaMatch = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(fecha.trim());
-  if (!fechaMatch) {
-    return { ok: false, error: 'La fecha tiene que ser DD/MM/AAAA' };
-  }
-  const [, dd, mm, aaaa] = fechaMatch;
-  const dia = Number(dd);
-  const mes = Number(mm);
-  const anio = Number(aaaa);
-
-  if (mes < 1 || mes > 12) {
-    return { ok: false, error: 'Mes inválido (1-12)' };
-  }
-  if (dia < 1 || dia > 31) {
-    return { ok: false, error: 'Día inválido (1-31)' };
-  }
-  if (anio < 2024 || anio > 2099) {
-    return { ok: false, error: 'Año fuera de rango' };
-  }
-
-  const horaMatch = /^(\d{2}):(\d{2})$/.exec(hora.trim());
-  if (!horaMatch) {
-    return { ok: false, error: 'La hora tiene que ser HH:MM (24h)' };
-  }
-  const [, hh, min] = horaMatch;
-  const h = Number(hh);
-  const m = Number(min);
-  if (h < 0 || h > 23) {
-    return { ok: false, error: 'Hora inválida (0-23)' };
-  }
-  if (m < 0 || m > 59) {
-    return { ok: false, error: 'Minutos inválidos (0-59)' };
-  }
-
-  // `Date` con mes 0-indexado
-  const local = new Date(anio, mes - 1, dia, h, m, 0, 0);
-  if (
-    local.getFullYear() !== anio ||
-    local.getMonth() !== mes - 1 ||
-    local.getDate() !== dia
-  ) {
-    return { ok: false, error: 'La fecha no es válida (ej. 31/02 no existe)' };
-  }
-
-  const ahora = new Date(Date.now() - 60_000); // 1 min de margen
-  if (local.getTime() < ahora.getTime()) {
-    return { ok: false, error: 'La fecha y hora no pueden ser en el pasado' };
-  }
-
-  return { ok: true, iso: local.toISOString() };
 }

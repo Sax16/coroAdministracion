@@ -6,10 +6,12 @@
  * - `mode="edit"`: pide `ensayoId`, edita un ensayo existente.
  *
  * Decisiones:
- * - La fecha y hora se piden con un DateTimePicker? No — para v0.1.0
- *   usamos inputs de texto (YYYY-MM-DD y HH:MM) con validación inline.
- *   DateTimePicker requiere un módulo nativo adicional que en SDK 56
- *   todavía tiene fricciones con `newArchEnabled`.
+ * - Fecha y hora se piden con `DatePickerField` y `TimePickerField`
+ *   (wrappers sobre `@react-native-community/datetimepicker`).
+ *   El usuario ve un campo "tap to pick" con el valor formateado
+ *   adentro; no tiene que tipear separadores a mano.
+ * - Trabajamos con `Date` (local) en el state del form. Recién al
+ *   guardar lo convertimos a ISO UTC con `combineLocalDateTime`.
  * - El encargado se elige de una lista plana de miembros del grupo
  *   (no es un selector fancy — para v0.1.0 alcanza).
  */
@@ -27,8 +29,16 @@ import {
 } from 'react-native';
 
 import { Button } from '@/components/Button';
+import { DatePickerField } from '@/components/DatePickerField';
+import { TimePickerField } from '@/components/TimePickerField';
 import { useGestionEnsayos, useMiembrosGrupo } from '@/features/ensayos/hooks';
 import { CrearEnsayoInput, EditarEnsayoInput, EnsayoConEncargado } from '@/features/ensayos/types';
+import {
+  combineLocalDateTime,
+  dateToHHMM,
+  hhmmToDate,
+  isoToLocalDate,
+} from '@/lib/dateTime';
 import { notificarPush } from '@/lib/pushApi';
 
 interface EnsayoFormProps {
@@ -38,44 +48,6 @@ interface EnsayoFormProps {
   ensayo?: EnsayoConEncargado | null;
   onGuardado: (id: string) => void;
   onCancelar: () => void;
-}
-
-function formatearFechaInput(iso: string): string {
-  // "2026-06-21T19:00:00-05:00" → "2026-06-21"
-  try {
-    const d = new Date(iso);
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
-  } catch {
-    return '';
-  }
-}
-
-function formatearHoraInput(iso: string): string {
-  try {
-    const d = new Date(iso);
-    const hh = String(d.getHours()).padStart(2, '0');
-    const mm = String(d.getMinutes()).padStart(2, '0');
-    return `${hh}:${mm}`;
-  } catch {
-    return '';
-  }
-}
-
-function combinarFechaHora(fecha: string, hora: string): string | null {
-  if (!fecha || !hora) return null;
-  const d = new Date(`${fecha}T${hora}:00`);
-  return isNaN(d.getTime()) ? null : d.toISOString();
-}
-
-function isHoraValida(hora: string): boolean {
-  return /^([01]\d|2[0-3]):[0-5]\d$/.test(hora);
-}
-
-function isFechaValida(fecha: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}$/.test(fecha);
 }
 
 export function EnsayoForm({
@@ -88,16 +60,20 @@ export function EnsayoForm({
   const { miembros, loading: loadingMiembros } = useMiembrosGrupo(grupoId);
   const { crear, editar, loading: guardando, error, clearError } = useGestionEnsayos();
 
-  // Estado del formulario
+  // Estado del formulario. Trabajamos con Date para fecha y hora.
   const [titulo, setTitulo] = useState(ensayo?.titulo ?? '');
-  const [fecha, setFecha] = useState(
-    ensayo?.fecha_inicio ? formatearFechaInput(ensayo.fecha_inicio) : '',
+  const [fecha, setFecha] = useState<Date | null>(
+    ensayo?.fecha_inicio ? isoToLocalDate(ensayo.fecha_inicio) : null,
   );
-  const [hora, setHora] = useState(
-    ensayo?.fecha_inicio ? formatearHoraInput(ensayo.fecha_inicio) : '19:00',
-  );
-  const [horaFin, setHoraFin] = useState(
-    ensayo?.fecha_fin ? formatearHoraInput(ensayo.fecha_fin) : '',
+  const [hora, setHora] = useState<Date | null>(() => {
+    if (ensayo?.fecha_inicio) {
+      const d = new Date(ensayo.fecha_inicio);
+      return isNaN(d.getTime()) ? hhmmToDate('19:00') : d;
+    }
+    return hhmmToDate('19:00');
+  });
+  const [horaFin, setHoraFin] = useState<Date | null>(
+    ensayo?.fecha_fin ? new Date(ensayo.fecha_fin) : null,
   );
   const [lugar, setLugar] = useState(ensayo?.lugar ?? '');
   const [descripcion, setDescripcion] = useState(ensayo?.descripcion ?? '');
@@ -109,23 +85,28 @@ export function EnsayoForm({
   const validar = useCallback((): boolean => {
     const e: Record<string, string> = {};
     if (!titulo.trim()) e.titulo = 'El título es obligatorio';
-    if (!isFechaValida(fecha)) e.fecha = 'Formato YYYY-MM-DD';
-    if (!isHoraValida(hora)) e.hora = 'Formato HH:MM (24h)';
-    if (horaFin && !isHoraValida(horaFin)) e.horaFin = 'Formato HH:MM (24h)';
+    if (!fecha) e.fecha = 'Seleccioná una fecha';
+    if (!hora) e.hora = 'Seleccioná una hora';
+    // horaFin es opcional; si está, debe ser > hora
+    if (horaFin && hora && horaFin.getTime() <= hora.getTime()) {
+      e.horaFin = 'La hora de fin debe ser después del inicio';
+    }
     setErrores(e);
     return Object.keys(e).length === 0;
   }, [titulo, fecha, hora, horaFin]);
 
   const onGuardar = useCallback(async () => {
     clearError();
-    if (!validar()) return;
+    if (!validar() || !fecha || !hora) return;
 
-    const fechaInicioISO = combinarFechaHora(fecha, hora);
+    const fechaInicioISO = combineLocalDateTime(fecha, dateToHHMM(hora));
     if (!fechaInicioISO) {
-      setErrores({ fecha: 'Fecha u hora inválida' });
+      setErrores({ hora: 'Hora inválida' });
       return;
     }
-    const fechaFinISO = horaFin ? combinarFechaHora(fecha, horaFin) : null;
+    const fechaFinISO = horaFin
+      ? combineLocalDateTime(fecha, dateToHHMM(horaFin))
+      : null;
 
     const datosComunes = {
       titulo: titulo.trim(),
@@ -141,7 +122,6 @@ export function EnsayoForm({
       const input: CrearEnsayoInput = { grupo_id: grupoId, ...datosComunes };
       const result = await crear(input);
       if (result) {
-        // Push a todos los miembros del grupo
         await notificarPush('ensayo_creado', {
           grupo_id: grupoId,
           ensayo_id: result.id,
@@ -225,60 +205,33 @@ export function EnsayoForm({
           ) : null}
         </View>
 
-        {/* Fecha y hora */}
+        {/* Fecha */}
         <View className="mx-4 mb-3 rounded-lg border border-slate-200 bg-white p-4">
-          <Text className="text-sm font-semibold text-slate-900">Cuándo</Text>
-          <View className="mt-3 flex-row gap-3">
+          <DatePickerField
+            label="Fecha *"
+            value={fecha}
+            onChange={setFecha}
+            error={errores.fecha}
+          />
+
+          {/* Hora inicio + Hora fin */}
+          <View className="mt-1 flex-row gap-3">
             <View className="flex-1">
-              <Text className="mb-1.5 text-sm font-medium text-slate-700">Fecha *</Text>
-              <TextInput
-                value={fecha}
-                onChangeText={setFecha}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor="#94a3b8"
-                keyboardType="numbers-and-punctuation"
-                maxLength={10}
-                className={`h-12 rounded-lg border bg-white px-3 text-base text-slate-900 ${
-                  errores.fecha ? 'border-red-500' : 'border-slate-300'
-                }`}
-              />
-              {errores.fecha ? (
-                <Text className="mt-1 text-xs text-red-600">{errores.fecha}</Text>
-              ) : null}
-            </View>
-            <View className="flex-1">
-              <Text className="mb-1.5 text-sm font-medium text-slate-700">Hora inicio *</Text>
-              <TextInput
+              <TimePickerField
+                label="Hora inicio *"
                 value={hora}
-                onChangeText={setHora}
-                placeholder="HH:MM"
-                placeholderTextColor="#94a3b8"
-                keyboardType="numbers-and-punctuation"
-                maxLength={5}
-                className={`h-12 rounded-lg border bg-white px-3 text-base text-slate-900 ${
-                  errores.hora ? 'border-red-500' : 'border-slate-300'
-                }`}
+                onChange={setHora}
+                error={errores.hora}
               />
-              {errores.hora ? (
-                <Text className="mt-1 text-xs text-red-600">{errores.hora}</Text>
-              ) : null}
             </View>
             <View className="flex-1">
-              <Text className="mb-1.5 text-sm font-medium text-slate-700">Hora fin</Text>
-              <TextInput
+              <TimePickerField
+                label="Hora fin"
                 value={horaFin}
-                onChangeText={setHoraFin}
-                placeholder="HH:MM"
-                placeholderTextColor="#94a3b8"
-                keyboardType="numbers-and-punctuation"
-                maxLength={5}
-                className={`h-12 rounded-lg border bg-white px-3 text-base text-slate-900 ${
-                  errores.horaFin ? 'border-red-500' : 'border-slate-300'
-                }`}
+                onChange={setHoraFin}
+                error={errores.horaFin}
+                placeholder="Opcional"
               />
-              {errores.horaFin ? (
-                <Text className="mt-1 text-xs text-red-600">{errores.horaFin}</Text>
-              ) : null}
             </View>
           </View>
         </View>

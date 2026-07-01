@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 
 import { Button } from '@/components/Button';
+import { TimePickerField } from '@/components/TimePickerField';
 import { useGuardarPatron, usePatron } from '@/features/patron/hooks';
 import {
   configToMap,
@@ -21,10 +22,10 @@ import {
   DIAS_LABELS,
   DIAS_ORDEN,
   Horario,
-  isHoraValida,
   mapToConfig,
   PATRON_VACIO,
 } from '@/features/patron/types';
+import { dateToHHMM, hhmmToDate, isHoraValida } from '@/lib/dateTime';
 
 /**
  * Pantalla de configuración del patrón recurrente.
@@ -212,19 +213,24 @@ interface DiaRowProps {
 }
 
 function DiaRow({ dia, horarios, onAgregar, onEliminar }: DiaRowProps) {
-  const [input, setInput] = useState('');
-  const [inputError, setInputError] = useState<string | null>(null);
+  // Estado del picker: mantenemos la hora seleccionada por el usuario
+  // hasta que toca "Agregar". Esto permite cambiar antes de commitear
+  // y no ensucia la lista con elecciones intermedias.
+  const [pickerHora, setPickerHora] = useState<Date | null>(hhmmToDate('19:00'));
+  const [pickerError, setPickerError] = useState<string | null>(null);
 
   const handleAgregar = () => {
-    const hora = input.trim();
-    if (!hora) return;
+    if (!pickerHora) {
+      setPickerError('Elegí una hora');
+      return;
+    }
+    const hora = dateToHHMM(pickerHora);
     if (!isHoraValida(hora)) {
-      setInputError('Formato HH:MM (24h)');
+      setPickerError('Hora inválida');
       return;
     }
     onAgregar(hora);
-    setInput('');
-    setInputError(null);
+    setPickerError(null);
   };
 
   return (
@@ -262,31 +268,19 @@ function DiaRow({ dia, horarios, onAgregar, onEliminar }: DiaRowProps) {
 
       <View className="mt-3 flex-row items-end gap-2">
         <View className="flex-1">
-          <TextInput
-            value={input}
-            onChangeText={(t) => {
-              setInput(t);
-              setInputError(null);
+          <TimePickerField
+            label="Agregar horario"
+            value={pickerHora}
+            onChange={(d) => {
+              setPickerHora(d);
+              setPickerError(null);
             }}
-            placeholder="HH:MM"
-            placeholderTextColor="#94a3b8"
-            keyboardType="numbers-and-punctuation"
-            maxLength={5}
-            autoCapitalize="none"
-            autoCorrect={false}
-            className={`h-12 rounded-lg border bg-white px-3 text-base text-slate-900 ${
-              inputError ? 'border-red-500' : 'border-slate-300'
-            }`}
-            onSubmitEditing={handleAgregar}
-            returnKeyType="done"
+            error={pickerError}
           />
-          {inputError ? (
-            <Text className="mt-1 text-xs text-red-600">{inputError}</Text>
-          ) : null}
         </View>
         <Pressable
           onPress={handleAgregar}
-          className="h-12 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 active:bg-slate-50"
+          className="mb-4 h-12 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 active:bg-slate-50"
         >
           <Text className="text-sm font-semibold text-slate-700">Agregar</Text>
         </Pressable>
