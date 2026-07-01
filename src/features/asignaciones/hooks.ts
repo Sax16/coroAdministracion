@@ -41,11 +41,23 @@ export function useServiciosSemana(grupoId: string, lunes: Date) {
     if (!grupoId) return;
     setLoading(true);
     setError(null);
-    // Convertimos a ISO: el lunes local a 00:00 y el lunes siguiente a 00:00
+    // El rango de la semana va de lunes 00:00 (local) a lunes 00:00
+    // (local, de la semana siguiente). Convertimos a ISO para que la DB
+    // filtre por `fecha_inicio` (que está guardada como timestamptz UTC).
+    //
+    // El truco del timezone: el trigger `generar_servicios_desde_patron`
+    // guarda "Domingo 19:00 Lima" como `lunes 00:00 UTC`. Si el `fin` lo
+    // pusiéramos en `lunes 05:00 UTC` (= lunes Lima 00:00) los servicios
+    // del domingo caerían 5 horas afuera del filtro. Solución: tomar el
+    // lunes-siguiente Lima como exclusivo (es el patrón estándar ISO),
+    // pero incluyendo el último instante del domingo Lima.
     const inicio = new Date(lunes);
     inicio.setHours(0, 0, 0, 0);
     const fin = new Date(inicio);
     fin.setDate(inicio.getDate() + 7);
+    // `fin` ya apunta a lunes-siguiente Lima 00:00; el `.lt(fin)` en la
+    // query es estricto (lt, no lte), así que cubre hasta el último ms
+    // anterior — que en Lima equivale al domingo 23:59:59.999. Perfecto.
     const result = await apiListarServicios(grupoId, inicio.toISOString(), fin.toISOString());
     if (!result.ok) {
       setError(result.error);
