@@ -3,6 +3,7 @@
  */
 import * as Notifications from 'expo-notifications';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Platform } from 'react-native';
 
 import Constants from 'expo-constants';
 
@@ -21,6 +22,10 @@ import {
  * - Hace upsert: si el token ya existe, actualiza `last_seen_at`.
  * - Si Expo devuelve error (ej. corriendo en Expo Go sin permisos),
  *   lo loguea y sigue — la app no se rompe.
+ * - Si FCM no está configurado en Android (`googleServicesFile` ausente),
+ *   sale silenciosamente: las alarmas locales siguen funcionando, solo
+ *   no se reciben pushes remotos. Ver docs/04-setup-fcm.md para
+ *   habilitar push remoto en una v0.2.0.
  * - Usa un `useRef` para evitar re-registros en cada render.
  */
 export function useRegistrarPushToken(): {
@@ -38,6 +43,18 @@ export function useRegistrarPushToken(): {
     if (registrado.current) return;
     setLoading(true);
     setError(null);
+
+    // Sin googleServicesFile no podemos obtener el push token en Android
+    // (FCM no inicializado). Salimos silenciosamente — las alarmas
+    // locales funcionan, solo no recibimos push remoto.
+    if (
+      Platform.OS === 'android' &&
+      !Constants.expoConfig?.android?.googleServicesFile
+    ) {
+      setLoading(false);
+      return;
+    }
+
     try {
       // 1. Pedir el push token a Expo
       const tokenData = await Notifications.getExpoPushTokenAsync({
