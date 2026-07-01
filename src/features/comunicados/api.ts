@@ -103,7 +103,7 @@ export async function crearComunicado(
     void notificarPush('comunicado_publicado', {
       grupo_id: input.grupo_id,
       comunicado_id: data.id,
-      titulo: input.titulo,
+      titulo: input.titulo.trim(),
     });
 
     return { ok: true, data: { id: data.id } };
