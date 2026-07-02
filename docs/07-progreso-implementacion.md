@@ -6,8 +6,10 @@
 > [`CHANGELOG.md`](../CHANGELOG.md) (que es por release), este doc es narrativo
 > y se actualiza conforme avanzamos.
 
-> Última actualización: 2026-06-17 (cierre de los 3 gaps MUST del MVP:
-> RF-011, RF-042, RF-043).
+> Última actualización: 2026-07-01 (pickers nativos de fecha/hora en los
+> formularios + migración a development build; Expo Go dejó de ser viable
+> con el SDK 56). Cierre previo (2026-06-17): 3 gaps MUST del MVP (RF-011,
+> RF-042, RF-043).
 
 ## 1. Dónde estamos
 
@@ -35,7 +37,7 @@ solo la capa de presentación. **Cerrados en esta sesión (2026-06-17)**:
 |---|---|---|
 | **RF-011** Editar grupo | `81ff975` | ✅ Implementado: `app/(app)/grupos/[id]/editar.tsx` + `editarGrupo()` en API + `useEditarGrupo()` en hooks. UPDATE directo a `public.grupos` filtrado por RLS admin. El home del grupo re-fetchea con `useFocusEffect` al volver del editor (sin flash) y sincroniza `grupoActivoStore` si cambió el nombre |
 | **RF-042** Excluir servicio puntual | `b40e987` | ✅ Implementado: `src/features/servicios/api.ts` (nueva feature) con `cancelarServicio()` + `useCancelarServicio()`. UI inline en `app/(app)/grupos/[id]/asignaciones/[servicioId].tsx` con zona peligrosa de admin. Badge "Cancelado" + tachado en el header. NO se borran asignaciones (quedan en historial). Push de cancelación queda como gap de RF-062 (v0.2.0) |
-| **RF-043** Crear servicio excepcional | `08ba294` | ✅ Implementado: `crearServicioExcepcional()` en la misma feature `servicios/`. Pantalla `app/(app)/grupos/[id]/servicios/nuevo.tsx` con form (título, fecha DD/MM/AAAA, hora HH:MM, lugar, descripción). INSERT directo a `public.servicios`. Inputs manuales (sin `expo-date-time-picker`) para no sumar deps en el MVP. **Decisión de scope:** la DB no modela la distinción "excepcional vs del patrón" (no hay `patron_id` en `servicios`); el UNIQUE(grupo_id, fecha_inicio) + el `ON CONFLICT DO NOTHING` del trigger hacen que el excepcional no sea pisado si cae en una fecha/hora del patrón. Marcarlo de primera clase queda para v0.2.0 |
+| **RF-043** Crear servicio excepcional | `08ba294` | ✅ Implementado: `crearServicioExcepcional()` en la misma feature `servicios/`. Pantalla `app/(app)/grupos/[id]/servicios/nuevo.tsx` con form (título, fecha, hora, lugar, descripción). INSERT directo a `public.servicios`. Fecha y hora con **pickers nativos** (`@react-native-community/datetimepicker`, agregado 2026-07-01). **Decisión de scope:** la DB no modela la distinción "excepcional vs del patrón" (no hay `patron_id` en `servicios`); el UNIQUE(grupo_id, fecha_inicio) + el `ON CONFLICT DO NOTHING` del trigger hacen que el excepcional no sea pisado si cae en una fecha/hora del patrón. Marcarlo de primera clase queda para v0.2.0 |
 
 Los 3 RFs **corrigieron** el claim que se mantuvo en sesiones previas
 ("todo el MUST del MVP está hecho"). Con estos commits, la app
@@ -71,7 +73,7 @@ cada uno.
 | **Editar perfil (RF-005)** | ✅ Implementado | Edición de nombre y apellido desde `/(app)/perfil/editar`. Update directo a `public.perfiles` filtrado por RLS (policy "perfiles: actualizar el propio"). `useFocusEffect` en el screen padre para re-fetchar silenciosamente al volver del editor (sin flash de spinner). Foto y teléfono quedan para v0.2.0 (requieren Storage + image picker) |
 | **Editar grupo (RF-011)** | ✅ Implementado | `app/(app)/grupos/[id]/editar.tsx` con form nombre + descripción. `editarGrupo()` en `src/features/grupos/api.ts` (UPDATE filtrado por RLS admin) + `useEditarGrupo()`. Home del grupo re-fetchea con `useFocusEffect` al volver y sincroniza `grupoActivoStore` si cambió el nombre |
 | **Excluir servicio puntual (RF-042)** | ✅ Implementado | Nueva feature `src/features/servicios/` con `cancelarServicio()` (UPDATE filtrado por RLS admin) + `useCancelarServicio()`. UI inline en `asignaciones/[servicioId].tsx` con zona peligrosa de admin + badge "Cancelado" + header tachado. NO borra asignaciones. **Gap residual:** push de "servicio cancelado" (parte de RF-062) no se dispara — v0.2.0 |
-| **Crear servicio excepcional (RF-043)** | ✅ Implementado | `crearServicioExcepcional()` en `src/features/servicios/api.ts` (INSERT directo a `public.servicios`, RLS admin). Pantalla `app/(app)/grupos/[id]/servicios/nuevo.tsx` con form (título, fecha DD/MM/AAAA, hora HH:MM, lugar, descripción). Validación cliente completa (rangos, formatos, no en pasado). **Gap residual:** push de "servicio creado" (parte de RF-060) no se dispara — v0.2.0 |
+| **Crear servicio excepcional (RF-043)** | ✅ Implementado | `crearServicioExcepcional()` en `src/features/servicios/api.ts` (INSERT directo a `public.servicios`, RLS admin). Pantalla `app/(app)/grupos/[id]/servicios/nuevo.tsx` con form (título, fecha y hora con pickers nativos, lugar, descripción). Validación cliente completa (rangos, formatos, no en pasado). **Gap residual:** push de "servicio creado" (parte de RF-060) no se dispara — v0.2.0 |
 | **Smoke test prep (v0.1.0)** | ✅ Validación estática completa | `expo-doctor` 21/21, `expo export --platform all` compila los 3 bundles (iOS 4.7MB, Android 4.9MB, Web 1.8MB), typecheck + lint limpios. Fixes de peer deps aplicadas (commit `b9d1a96`). Plan de smoke test ejecutable en [`08-smoke-test.md`](./08-smoke-test.md) |
 | Routing Expo | ✅ Estructura | Grupos `(auth)` y `(app)` con guards de redirección |
 
@@ -102,53 +104,6 @@ cada uno.
   El comportamiento de la app NO cambia (las RLS subyacentes ya filtran
   por grupo del caller). El linter se silencia porque la vista queda
   explícitamente marcada como segura.
-
-### Lo que YA está hecho ✅
-
-| Área | Estado | Detalle |
-|---|---|---|
-| Docs de producto | ✅ Completo | 7 documentos + `07-progreso-implementacion.md`, auditados y corregidos |
-| Bootstrap Expo | ✅ Completo | SDK 56 + TS strict + NativeWind + Expo Router |
-| Cliente Supabase | ✅ Wireado | `src/lib/supabase.ts` con AsyncStorage |
-| Migración inicial | ✅ Commiteada | `20260614000000_initial_schema.sql` (1.255 líneas) |
-| Script reset dev | ✅ Commiteado | `supabase/scripts/reset_dev.sql` con header destructivo |
-| `CHANGELOG.md` raíz | ✅ Creado | Formato Keep a Changelog |
-| Componentes UI base | ✅ Creado | `Button` y `LabeledInput` con paleta del proyecto |
-| **Auth (login/register/logout)** | ✅ Implementado | Cubre RF-001, RF-002, RF-003. Store + API + hooks + pantallas |
-| **Crear grupo** | ✅ Implementado | Cubre RF-010. Vía SECURITY DEFINER `crear_grupo()` |
-| **Listado de mis grupos** | ✅ Implementado | Cubre RF-016. Con JOIN a `usuarios_grupos` filtrado por RLS |
-| **Selector de grupo activo** | ✅ Implementado | Cubre RF-015. Persistencia en AsyncStorage |
-| **Patrón recurrente semanal** | ✅ Implementado | Cubre RF-040, RF-041 (vía trigger de DB) y RF-044. UI por día con chips de horarios |
-| **Asignaciones semanales** | ✅ Implementado | Cubre RF-050, RF-051, RF-052, RF-053. Vista semanal con navegación de semana, asignación multi-rol por miembro-servicio |
-| **Pantalla "Mi semana" + scheduler de alarmas** | ✅ Implementado | Cubre RF-054, RF-055, RF-063, RF-064. Vista 14 días con servicios del usuario, agenda alarmas locales con `expo-notifications`, pide `SCHEDULE_EXACT_ALARM` en Android 12+ |
-| **Push notifications (infra)** | ✅ Implementado | Edge Function `notificar-push` + tabla `notificaciones` + feature `dispositivos/` con `PushTokenRegistrar`. Cubre RF-060, RF-061, RF-062, RF-065, RF-066, RF-083, RF-085. RF-086 (limpieza de tokens) queda para v0.2.0 |
-| **Ensayos (CRUD + invitados)** | ✅ Implementado | Cubre RF-070, RF-071, RF-072, RF-073, RF-074. Listado, crear, editar, detalle, cancelar/reabrir, asignación de encargado, gestión de invitados. Push integrado. Cierre de asistencia (RF-075) queda para v0.2.0 |
-| **Cierre de asistencia de servicio** | ✅ Implementado | Cubre RF-090, RF-091, RF-092, RF-093, RF-094, RF-095, RF-096, RF-097. Pantalla de cierre para responsable/admin, pantalla de justificación para miembro, badges de estado en mi-semana, CTA cerrar en vista admin |
-| **Comunicados** | ✅ Implementado | Cubre RF-080, RF-081, RF-082, RF-083, RF-084. Listado cronológico, crear, editar, eliminar, detalle. Push al publicar (comunicado_publicado) |
-| **Home del grupo** | ✅ Implementado | Dashboard post-selección de grupo activo con resumen de la semana y grid de accesos rápidos. Pantalla principal post-login |
-| **Solicitar ingreso a grupo (RF-020 a RF-023)** | ✅ Implementado | Búsqueda por nombre, enviar solicitud, inbox admin, aprobar/rechazar. Push en 4 eventos. Migración nueva abre SELECT de grupos para descubrimiento |
-| **Eliminar cuenta (RF-006)** | ✅ Implementado | Doble barrera: pre-check en UI de grupos donde es admin (con CTAs transferir/eliminar) + tipeo literal de "ELIMINAR" + Alert.alert destructivo final. Pantallas `/(app)/perfil` y `/(app)/perfil/eliminar`. Limpia stores (grupo activo y sesión) tras éxito |
-| **Transferir admin (RF-013) y Eliminar grupo (RF-012)** | ✅ Implementado | Pantallas `/(app)/grupos/[id]/transferir-admin` y `/(app)/grupos/[id]/eliminar` con doble confirmación. Accesos admin en home del grupo. La pantalla de transferir-admin detecta `?origen=eliminar-cuenta` para volver al flujo correcto |
-| **Editar perfil (RF-005)** | ✅ Implementado | Edición de nombre y apellido desde `/(app)/perfil/editar`. Update directo a `public.perfiles` filtrado por RLS (policy "perfiles: actualizar el propio"). `useFocusEffect` en el screen padre para re-fetchar silenciosamente al volver del editor (sin flash de spinner). Foto y teléfono quedan para v0.2.0 (requieren Storage + image picker) |
-| **Editar grupo (RF-011)** | ✅ Implementado | `app/(app)/grupos/[id]/editar.tsx` con form nombre + descripción. `editarGrupo()` en `src/features/grupos/api.ts` (UPDATE filtrado por RLS admin) + `useEditarGrupo()`. Home del grupo re-fetchea con `useFocusEffect` al volver y sincroniza `grupoActivoStore` si cambió el nombre |
-| **Excluir servicio puntual (RF-042)** | ✅ Implementado | Nueva feature `src/features/servicios/` con `cancelarServicio()` (UPDATE filtrado por RLS admin) + `useCancelarServicio()`. UI inline en `asignaciones/[servicioId].tsx` con zona peligrosa de admin + badge "Cancelado" + header tachado. NO borra asignaciones. **Gap residual:** push de "servicio cancelado" (parte de RF-062) no se dispara — v0.2.0 |
-| **Crear servicio excepcional (RF-043)** | ✅ Implementado | `crearServicioExcepcional()` en `src/features/servicios/api.ts` (INSERT directo a `public.servicios`, RLS admin). Pantalla `app/(app)/grupos/[id]/servicios/nuevo.tsx` con form (título, fecha DD/MM/AAAA, hora HH:MM, lugar, descripción). Validación cliente completa (rangos, formatos, no en pasado). **Gap residual:** push de "servicio creado" (parte de RF-060) no se dispara — v0.2.0 |
-| **Smoke test prep (v0.1.0)** | ✅ Validación estática completa | `expo-doctor` 21/21, `expo export --platform all` compila los 3 bundles (iOS 4.7MB, Android 4.9MB, Web 1.8MB), typecheck + lint limpios. Fixes de peer deps aplicadas (commit `b9d1a96`). Plan de smoke test ejecutable en [`08-smoke-test.md`](./08-smoke-test.md) |
-| Routing Expo | ✅ Estructura | Grupos `(auth)` y `(app)` con guards de redirección |
-
-### Lo que FALTA para MVP (siguiente sprint) 🟡
-
-| Prioridad | Feature | RF-### | Depende de |
-|---|---|---|---|
-| 🟥 MUST | Asignaciones semanales | RF-050, RF-051, RF-052 | Servicios generados |
-| 🟥 MUST | Pantalla "Mi semana" + scheduler de alarmas | RF-054, RF-055, RF-063, RF-064 | Asignaciones |
-| 🟥 MUST | Push notifications via Edge Function | RF-060, RF-061, RF-062, RF-083, RF-085 | Servicios + auth |
-| 🟥 MUST | Home del grupo (post-selección de grupo activo) | (nuevo) | Selector de grupo activo |
-| 🟧 SHOULD | Ensayos | RF-070 → RF-076 | (paralelizable) |
-| 🟧 SHOULD | Comunicados | RF-080 → RF-084 | (paralelizable) |
-| 🟧 SHOULD | Cierre de asistencia + justificaciones | RF-090 → RF-097 | Asignaciones |
-| ✅ DONE | Eliminar cuenta con validaciones | RF-006 | Auth + grupos |
-| 🟧 SHOULD | Solicitar unirse a grupo existente | RF-020 → RF-023 | Auth |
 
 ## 2. Decisiones técnicas tomadas durante implementación
 
@@ -276,7 +231,7 @@ por Babel (JSX runtime, plugin runtime, etc.) y que no esté en
 solo cuando es al revés; este caso es el inverso y se detecta
 corriendo `expo export`.
 
-## 3. Fixes aplicados durante implementación
+### F-01 · Policy de `perfiles` bloqueaba el trigger `handle_new_user`
 
 **Origen:** el bloque `_bloque2_logica.sql` original tenía la policy
 `with check (id = auth.uid())`. Esto bloquea al trigger `handle_new_user()`
@@ -376,7 +331,8 @@ cero) y con intentos de "intentar de nuevo" si algo falla a mitad.
 
 - ✅ **Cerrados los 3 gaps MUST** (commits `81ff975` RF-011, `b40e987` RF-042, `08ba294` RF-043) — typecheck/lint/export limpios
 - 🟧 Smoke test E2E: ejecutar los 13 escenarios de `08-smoke-test.md`
-  (requiere simulador iOS o emulador Android, o Expo Go en dispositivo físico)
+  (requiere simulador iOS, emulador Android o una **development build** en
+  dispositivo físico — Expo Go no soporta el SDK 56)
 - 🟧 Rotar `SUPABASE_SERVICE_ROLE_KEY` y `DATABASE_URL` del `.env` dev
   (estos se filtraron en un output de Bash de la sesión 2026-06-16; documentar
   como riesgo R-6)
@@ -400,7 +356,7 @@ cero) y con intentos de "intentar de nuevo" si algo falla a mitad.
 | R-4 | Push puede llegar tarde en Doze mode | Aceptado: la alarma local al abrir app es el plan A |
 | R-5 | Costos de Apple Developer + Google Play los asume el grupo | Documentado en `01-vision-y-alcance.md` §8 |
 | R-6 | `SUPABASE_SERVICE_ROLE_KEY` y `DATABASE_URL` del `.env` dev se filtraron en output de Bash (sesión 2026-06-16) | Rotar ambas credenciales desde el dashboard de Supabase antes de la beta |
-| R-7 | Tooling nativo (Xcode full, JDK, Android Studio) no instalado en el entorno de dev | Bloqueante solo para builds nativos; Expo Go cubre el smoke test |
+| R-7 | Tooling nativo (Xcode full, JDK, Android Studio) no instalado en el entorno de dev | Bloqueante solo para builds nativos; el smoke test corre sobre una **development build** de EAS (Expo Go no soporta el SDK 56 ni el push remoto) |
 | R-8 | 3 RF MUST sin UI (RF-011, RF-042, RF-043) detectados al cierre del MVP | **Resuelto** (2026-06-17): commits `81ff975`, `b40e987`, `08ba294`. Único residuo: el push de "servicio cancelado" (parte de RF-062) no se dispara desde la UI de cancelación — queda para v0.2.0 |
 
 ## 6. Plan de cierre de gaps del MVP ✅
@@ -455,11 +411,10 @@ servicio queda cancelado en DB, lo único que falta es el push.
   `ON CONFLICT DO NOTHING` del trigger hacen que el excepcional no sea pisado
   si cae en una fecha/hora del patrón. Marcarlo como flag de primera clase
   queda para v0.2.0 (requiere migración).
-- `app/(app)/grupos/[id]/servicios/nuevo.tsx`: form con título, fecha
-  (DD/MM/AAAA), hora (HH:MM), lugar opcional, descripción opcional.
-  Inputs manuales con `inputMode="numeric"` (no usamos
-  `expo-date-time-picker` para no sumar deps en el MVP — es trivial
-  cambiar a un picker nativo en v0.2.0 si querés mejor UX).
+- `app/(app)/grupos/[id]/servicios/nuevo.tsx`: form con título, fecha y hora con **pickers nativos**
+  (`DatePickerField`/`TimePickerField` sobre `@react-native-community/datetimepicker`),
+  lugar opcional, descripción opcional. Migrado de inputs de texto manual
+  a pickers nativos el 2026-07-01.
   Validación cliente completa: rangos, formatos, fecha no en pasado
   (margen 1 min), `31/02` → error explícito.
 - `app/(app)/grupos/[id]/index.tsx`: `AccesoCard` "Servicio excepcional"

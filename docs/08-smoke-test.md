@@ -6,7 +6,8 @@
 ## 1. Alcance y criterios de salida
 
 Este smoke test valida que el MVP funciona end-to-end en un entorno local
-controlado (Expo Go en simulador iOS o emulador Android, **no** TestFlight).
+controlado (development build de EAS en dispositivo físico, simulador iOS o
+emulador Android, **no** TestFlight).
 El objetivo es encontrar bugs críticos antes de invertir tiempo y dinero en
 la distribución a testers externos.
 
@@ -51,10 +52,13 @@ Para correr en simulador iOS / emulador Android necesitás, además:
 | Android SDK Platform | 35 | desde Android Studio SDK Manager | API 35 es el target de RN 0.85 |
 | Android Emulator | API 34+ | desde Android Studio AVD Manager | Para emular dispositivos |
 
-**Alternativa rápida:** si solo querés validar la lógica de negocio sin
-preocuparte por builds nativos, **usá Expo Go** en un teléfono físico o en
-el simulador de iOS (`i` en la terminal de `pnpm start`). Expo Go ya tiene
-todos los native modules de SDK 56 y evita todo el setup de arriba.
+**Nota sobre Expo Go (ya no aplica):** Expo Go dejó de ser una opción — la
+app usa el SDK 56 (no soportado por la app pública de Expo Go) y el push
+remoto tampoco funciona ahí. En su lugar el proyecto usa una **development
+build** (`expo-dev-client`): se genera una vez con
+`eas build --profile development --platform android` (o `ios`), se instala el
+binario y luego `pnpm start` le sirve el JS igual que Expo Go, pero con todos
+los módulos nativos (datetimepicker, notificaciones, etc.).
 
 ### 2.3. Estado del backend
 
@@ -143,8 +147,8 @@ La generación es atómica: o genera todo o nada.
 3. Tap en un servicio futuro → "Asignar"
 4. Elegir cuenta B para rol "Voz 1"
 5. Save
-6. Verificar en `asignaciones` que hay 1 fila con `estado='asignado'`
-7. Verificar que se creó una fila en `estados_asistencia` (RF-092)
+6. Verificar en `asignaciones_servicio` que hay 1 fila con `estado='asignado'`
+7. Verificar que se creó una fila en `estados_asistencia_servicio` (RF-092)
 
 **Espera:** pantalla de asignaciones muestra a B con el rol en el slot
 correspondiente. La UI de "Mi semana" de B lo refleja.
@@ -225,7 +229,7 @@ cronológico inverso.
 2. Tap "Cerrar asistencia"
 3. Marcar cuenta B como "Asistió" + otro como "Faltó"
 4. Save
-5. Verificar en `asistencia` que las filas tienen `estado` correspondiente
+5. Verificar en `estados_asistencia_servicio` que las filas tienen `estado` correspondiente
 6. La pantalla de "Mi semana" de B debe mostrar el badge "Asistió"
 
 **Espera:** pantalla de cierre muestra totales correctos. Las justificaciones
@@ -241,7 +245,7 @@ quedan pendientes para el que faltó.
 2. Botón "Justificar"
 3. Texto libre: "Estuve enfermo"
 4. Submit
-5. Verificar en `justificaciones` con `estado='pendiente'`
+5. Verificar en `justificaciones_servicio` que se creó la fila con el texto
 6. Cuenta A: debe ver la justificación pendiente en el detalle del servicio
 
 **Espera:** el badge de B cambia a "Falta justificada". El admin puede

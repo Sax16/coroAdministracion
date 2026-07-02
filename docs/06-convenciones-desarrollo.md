@@ -109,6 +109,6 @@ Convención derivada de Conventional Commits: el prefijo del branch matchea el t
 - [ ] `pnpm typecheck` (cuando esté configurado)
 - [ ] `pnpm lint` (cuando esté configurado)
 - [ ] `pnpm test` (cuando haya tests)
-- [ ] Probado en iOS Simulator y Android Emulator (o en Expo Go)
+- [ ] Probado en iOS Simulator y Android Emulator (o en una development build)
 - [ ] Sin secretos en el diff
 - [ ] Sin archivos generados por error
